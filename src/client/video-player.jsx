@@ -126,7 +126,7 @@ function useNativeSubtitles(videoRef, subtitles, selected, localTracks) {
 }
 
 /** 字幕选择菜单：服务器轨 / 自动搜索下载（Emby 服务端）/ 本地字幕文件。 */
-function SubtitleMenu({ videoRef, subtitles, selected, setSelected, serverId, itemId, msId, isHls, onRefresh }) {
+function SubtitleMenu({ videoRef, subtitles, selected, setSelected, serverId, itemId, msId, onRefresh }) {
   const [open, setOpen] = useState(false)
   const [remote, setRemote] = useState(null) // 远程搜索结果 { list, message, unavailable }
   const [remoteBusy, setRemoteBusy] = useState(false)
@@ -201,7 +201,7 @@ function SubtitleMenu({ videoRef, subtitles, selected, setSelected, serverId, it
           onClick: () => { setSelected(i); setOpen(false) },
         }, `${s.label}${s.lang ? ` · ${s.lang}` : ''}${s.codec ? ` (${s.codec})` : ''}`)),
         h('button', { className: `item${selected === 'off' ? ' is-on' : ''}`, onClick: () => { setSelected('off'); setOpen(false) } }, '关闭字幕'))
-      : h('div', { className: 'empty' }, isHls ? '转码模式下可开启服务器字幕（烧录进画面）' : '该版本没有内嵌/外挂字幕流'),
+      : h('div', { className: 'empty' }, '该版本没有内嵌/外挂字幕流'),
       h('div', { className: 'sep' }),
       h('button', { className: 'item', disabled: remoteBusy, onClick: searchRemote },
         remoteBusy ? '搜索中…' : '🔍 自动搜索字幕（服务器）'),
@@ -252,7 +252,7 @@ export function InlinePlayer({ title, url, fallbackUrl, onClose, onFallback, sub
     ? () => { setActiveUrl(fallbackUrl); onFallback?.() }
     : null
 
-  /* 首次挂轨自动选中文字幕轨（用户没手动选过时） */
+  /* 首次挂轨自动选中文字幕轨（用户没手动选过时）；直连与转码播放都走 <track> 渲染 */
   useEffect(() => {
     if (selected !== null || !subtitles.length) return
     const zh = subtitles.findIndex((s) => isZhLang(s.lang))
@@ -260,19 +260,6 @@ export function InlinePlayer({ title, url, fallbackUrl, onClose, onFallback, sub
   }, [subtitles]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useNativeSubtitles(videoRef, subtitles, selected, null)
-
-  /* HLS 转码 + 选了字幕轨 → 改写 u 参数加 SubtitleStreamIndex（Emby 把字幕烧进转码画面） */
-  const burnedIndex = isHls && typeof selected === 'number' ? subtitles[selected]?.index : null
-  useEffect(() => {
-    if (!isHls) return
-    // searchParams.get 返回的是解码后的原始 Emby 地址；先剥掉旧烧录参数再按需追加
-    const uParam = new URL(activeUrl, location.origin).searchParams.get('u') || ''
-    const clean = uParam.replace(/&SubtitleStreamIndex=\d+/g, '')
-    const rebuilt = burnedIndex != null
-      ? `/funhub/api/video/m3u8?u=${encodeURIComponent(`${clean}&SubtitleStreamIndex=${burnedIndex}`)}`
-      : `/funhub/api/video/m3u8?u=${encodeURIComponent(clean)}`
-    if (rebuilt !== activeUrl) setActiveUrl(rebuilt)
-  }, [burnedIndex, isHls]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const goFullscreen = () => {
     const el = wrapRef.current
@@ -288,18 +275,17 @@ export function InlinePlayer({ title, url, fallbackUrl, onClose, onFallback, sub
       subtitles.length ? h('span', { className: 'fh-muted', style: { fontSize: 11 } }, `· ${subtitles.length} 条字幕`) : null,
       h('div', { className: 'fh-spacer' }),
       serverId && itemId && msId ? h(SubtitleMenu, {
-        videoRef, subtitles, selected, setSelected, serverId, itemId, msId, isHls, onRefresh,
+        videoRef, subtitles, selected, setSelected, serverId, itemId, msId, onRefresh,
       }) : null,
       h('button', { className: 'fh-icon-btn', onClick: goFullscreen, title: '全屏' }, h(Icon, { name: 'full', size: 15 })),
       onClose ? h('button', { className: 'fh-icon-btn', onClick: onClose, title: '停止播放' }, h(Icon, { name: 'close', size: 15 })) : null),
     h('div', { className: 'fh-inline-player-stage' },
-      h('video', {
-        ref: videoRef, controls: true, autoPlay: true, playsInline: true, crossOrigin: 'anonymous',
-      },
-        !isHls && subtitles.map((s) => h('track', {
+      h('video', { ref: videoRef, controls: true, autoPlay: true, playsInline: true },
+        subtitles.map((s) => h('track', {
           key: `${s.index}:${s.label}`, kind: 'subtitles', src: s.url, label: s.label,
           srclang: s.lang || 'und',
-        }))),
+        })),
+      ),
       fatal ? h(FatalPanel, { fatal, fallback: switchFallback, activeUrl }) : null))
 }
 
