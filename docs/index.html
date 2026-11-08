@@ -54,6 +54,12 @@
   .bg-novel-l { background: url("assets/novel-bg-light.webp") center/cover; }
   .bg-rss-l { background: url("assets/rss-bg-light.webp") center/cover; }
   .bg-games-l { background: url("assets/games-bg-light.webp") center/cover; }
+  /* 截图画廊 */
+  .shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 18px; }
+  .shots figure { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .shots img { display: block; width: 100%; aspect-ratio: 1280 / 860; object-fit: cover; border-bottom: 1px solid var(--line); }
+  .shots figcaption { padding: 10px 14px; font-size: 12.5px; color: var(--ink2); }
+  @media (max-width: 560px) { .shots { grid-template-columns: 1fr; } }
   /* 贴纸墙 */
   .stickers { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
   .stickers img { width: 64px; height: 64px; border-radius: 14px; background: #f6efe3; }
@@ -109,9 +115,24 @@
   </div>
 </section>
 
+<section id="shots">
+  <div class="wrap">
+    <h2><span class="no">02</span>界面一览</h2>
+    <p class="lead">以下截图均来自<strong>合成演示数据</strong>的运行实例（书名 / 订阅 / 媒体库均为虚构示例，不含任何真实数据）。</p>
+    <div class="shots">
+      <figure><img src="assets/shots/home.webp" alt="FunHub 首页：星空欢迎区与内容卡片" loading="lazy"><figcaption>首页 Dashboard · 卡片可调序/调尺寸</figcaption></figure>
+      <figure><img src="assets/shots/novel.webp" alt="小说发现页：左侧书源列表，右侧分类与书墙" loading="lazy"><figcaption>小说发现 · 左列源管理，失效源随手删</figcaption></figure>
+      <figure><img src="assets/shots/reader.webp" alt="小说阅读器：正文排版与章节导航" loading="lazy"><figcaption>阅读器 · 字号/行距/主题，章末手动翻章</figcaption></figure>
+      <figure><img src="assets/shots/video.webp" alt="影视 Emby 媒体库海报墙" loading="lazy"><figcaption>影视 · Emby 剧集归组，转码自动降级</figcaption></figure>
+      <figure><img src="assets/shots/games.webp" alt="小游戏街机：八款游戏卡片" loading="lazy"><figcaption>小游戏 · 八款内置 + 合成音效</figcaption></figure>
+      <figure><img src="assets/shots/rss.webp" alt="RSS 阅读器：左侧订阅列表与文章列表" loading="lazy"><figcaption>RSS · 订阅管理 + 正文阅读</figcaption></figure>
+    </div>
+  </div>
+</section>
+
 <section id="art" style="background: var(--panel2);">
   <div class="wrap">
-    <h2><span class="no">02</span>亮暗两套氛围背景</h2>
+    <h2><span class="no">03</span>亮暗两套氛围背景</h2>
     <p class="lead">AI 生成的成对背景：暗色深邃、亮色奶油，跟随主题自动切换（下面每行左暗右亮，本页也跟随你的系统主题）。</p>
     <div class="strip">
       <div class="shot bg-home" data-label="首页 · 暗色"></div>
@@ -130,7 +151,7 @@
 
 <section>
   <div class="wrap">
-    <h2><span class="no">03</span>游戏贴纸</h2>
+    <h2><span class="no">04</span>游戏贴纸</h2>
     <p class="lead">18 张 AI 绘制的奶油底贴纸，统一可爱风：推箱子 / 贪吃蛇 / 翻翻乐全道具。</p>
     <div class="stickers">
       <img src="assets/soko-player.webp" alt="推箱子兔子"><img src="assets/soko-box.webp" alt="箱子"><img src="assets/soko-box-done.webp" alt="礼物箱"><img src="assets/soko-goal.webp" alt="目标点"><img src="assets/soko-wall.webp" alt="墙块">
@@ -142,7 +163,7 @@
 
 <section id="install" style="background: var(--panel2);">
   <div class="wrap">
-    <h2><span class="no">04</span>安装</h2>
+    <h2><span class="no">05</span>安装</h2>
     <p class="lead">需要本机已安装 DeepSeek Harness 桌面版；插件以 link 方式装进 desktop profile。</p>
 <pre><b>git clone</b> https://github.com/ahao430/dsh-funhub.git
 <b>cd</b> dsh-funhub && npm install && npm run build
@@ -159,7 +180,7 @@
 
 <section id="privacy">
   <div class="wrap">
-    <h2><span class="no">05</span>数据与隐私</h2>
+    <h2><span class="no">06</span>数据与隐私</h2>
     <p class="lead">FunHub 不内置任何内容源；你的源配置永远只在你本机。</p>
     <div class="note" style="margin-bottom:18px;">
       <b>所有源的配置（书源 / 漫画源 / 音源 / Emby 账密 / 图片 Key / RSS 订阅）都存在 <code>$DSH_HOME/funhub/state.json</code>（通常 <code>~/.dsh/funhub/</code>）</b>，不在本仓库、不进 git。仓库的 <code>.gitignore</code> 对 <code>state.json</code>、<code>*.local.json/js</code>、<code>.env*</code> 做了防御性排除。Emby 的 API Key 只留在宿主侧，浏览器端拿不到。
