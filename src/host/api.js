@@ -590,7 +590,7 @@ export async function route(ctx, store, req, res) {
         const error = info.loadError || (info.hasSearch ? null : '脚本未提供 search.load 接口')
         probe.dispose()
         const result = await store.write((state) => OPS.comicsource_add(state, { script: text, info, error }))
-        if (result.added === false) return { ok: true, skipped: true, name: label || info?.name }
+        if (result.added === false) return { ok: true, skipped: true, updated: true, name: label || result.comicSource.name }
         return { ok: true, id: result.comicSource.id, name: result.comicSource.name, error }
       }
 
@@ -617,7 +617,7 @@ export async function route(ctx, store, req, res) {
             try {
               const text = (await safeFetchText(baseDir + entry.fileName, { timeout: 30_000, maxSize: MAX_SCRIPT })).trim()
               const r = await importOne(text, entry.name || entry.fileName)
-              if (r.ok && r.skipped) skipped += 1
+              if (r.ok && r.skipped) manifestImport.skipped += 1
               else if (r.ok) manifestImport.added += 1
               else manifestImport.failed.push({ name: r.name || entry.fileName, error: r.error })
             } catch (err) {

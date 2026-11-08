@@ -93,6 +93,19 @@ export const OPS = {
 
 /* ---- 漫画（venera 源） ---- */
   comicsource_add(state, { script, info, error }) {
+    // 同 key 视为同一源：覆盖脚本与元信息，保留 id/启用状态/账号数据；避免重复导入清单堆出几百条
+    const key = info?.key || ''
+    if (key) {
+      const at = state.comicSources.findIndex((s) => s.key === key)
+      if (at >= 0) {
+        const row = state.comicSources[at]
+        state.comicSources[at] = {
+          ...row, script, name: info?.name || row.name, key,
+          version: info?.version || '', error: error || null,
+        }
+        return { added: false, updated: true, comicSource: { ...state.comicSources[at], script: undefined } }
+      }
+    }
     const row = {
       id: newId(),
       script,
@@ -106,7 +119,7 @@ export const OPS = {
       addedAt: Date.now(),
     }
     state.comicSources.push(row)
-    return { added: true, comicSource: { ...row, script: undefined } }
+    return { added: true, updated: false, comicSource: { ...row, script: undefined } }
   },
   comicsource_remove(state, { id }) {
     state.comicSources = state.comicSources.filter((s) => s.id !== id)

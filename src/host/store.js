@@ -81,7 +81,7 @@ export function defaultState() {
   }
 }
 
-function migrate(state) {
+export function migrate(state) {
   const next = { ...defaultState(), ...(state || {}) }
   next.settings = { ...defaultState().settings, ...(state?.settings || {}) }
   next.settings.imageSources = { ...defaultState().settings.imageSources, ...(state?.settings?.imageSources || {}) }
@@ -104,6 +104,17 @@ function migrate(state) {
   // 旧版默认布局（右侧留洞）一次性迁移；用户自定义过的布局不动
   if (JSON.stringify(next.layout) === JSON.stringify(OLD_DEFAULT_LAYOUT)) {
     next.layout = defaultLayout()
+  }
+  // 漫画源按 key 去重（历史版本导入不去重，同一清单可能堆出几百条）；同 key 保留最新一份，
+  // 无 key 的行（解析失败的脚本）逐条保留，便于单独删除
+  if (next.comicSources.length > 1) {
+    const seen = new Map()
+    for (const s of next.comicSources) {
+      const k = s.key || `id:${s.id}`
+      const prev = seen.get(k)
+      if (!prev || (s.addedAt || 0) >= (prev.addedAt || 0)) seen.set(k, s)
+    }
+    next.comicSources = [...seen.values()]
   }
   return next
 }

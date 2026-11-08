@@ -497,7 +497,7 @@ function ComicSourceSection() {
         pollProgress()
       } else {
         setImporting(false)
-        actions.toast(body.skipped ? '已存在同 key/同名源，跳过导入' : (body.error ? `导入异常：${body.error}` : `已导入漫画源 ${body.comicSource?.name || ''}`))
+        actions.toast(body.skipped ? '同 key 漫画源已存在，脚本已更新' : (body.error ? `导入异常：${body.error}` : `已导入漫画源 ${body.comicSource?.name || ''}`))
       }
     } catch (err) {
       actions.toast(`导入失败：${err.message}`)
