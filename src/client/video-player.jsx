@@ -168,7 +168,7 @@ function SubtitleMenu({ videoRef, subtitles, selected, setSelected, serverId, it
     } finally { setRemoteBusy(false) }
   }
 
-  /** 公共字幕站（OpenSubtitles）搜索与下载：srt/ass 宿主转 vtt 直接挂轨，压缩包落盘手动导入。 */
+  /** 公共字幕站搜索：SubtitleCat（免 Key，两级：详情页 → 语言变体）+ OpenSubtitles（有 Key）。 */
   const searchWeb = async () => {
     setWebBusy(true); setWeb(null)
     try {
@@ -196,10 +196,22 @@ function SubtitleMenu({ videoRef, subtitles, selected, setSelected, serverId, it
   const downloadWeb = async (s) => {
     setWebBusy(true)
     try {
+      // SubtitleCat 条目：先展开详情页的语言变体
+      if (s.provider === 'subtitlecat' && s.detailUrl) {
+        const res = await fetch('/funhub/api/video/subtitles/web-detail', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ detailUrl: s.detailUrl }),
+        })
+        const r = await res.json()
+        if (!res.ok || !r.ok) throw new Error(r.error || `HTTP ${res.status}`)
+        setWeb((prev) => ({ list: r.list || [], back: prev?.list || [], source: s.title }))
+        return
+      }
       const res = await fetch('/funhub/api/video/subtitles/web-download', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ fileId: s.fileId }),
+        body: JSON.stringify(s.provider === 'subtitlecat' ? { provider: 'subtitlecat', url: s.url } : { fileId: s.fileId }),
       })
       const r = await res.json()
       if (!res.ok || !r.ok) throw new Error(r.error || `HTTP ${res.status}`)
@@ -267,13 +279,18 @@ function SubtitleMenu({ videoRef, subtitles, selected, setSelected, serverId, it
       remote?.message ? h('div', { className: 'empty' }, remote.message) : null,
       h('div', { className: 'sep' }),
       h('button', { className: 'item', disabled: webBusy, onClick: searchWeb },
-        webBusy ? '搜索中…' : '🌐 公共字幕站搜索（OpenSubtitles）'),
+        webBusy ? '搜索中…' : '🌐 公共字幕站搜索（免 Key · SubtitleCat）'),
+      web?.back?.length ? h('button', { className: 'item', onClick: () => setWeb({ list: web.back }) }, '‹ 返回搜索结果') : null,
       web?.list?.length ? h('div', { className: 'sec' },
-        web.list.slice(0, 8).map((s, i) => h('button', {
-          key: `${s.fileId}:${i}`, className: 'item', disabled: webBusy,
-          title: s.release || s.fileName,
+        web.list.slice(0, 10).map((s, i) => h('button', {
+          key: `${s.provider}:${s.fileId || s.url || s.detailUrl}:${i}`, className: 'item', disabled: webBusy,
+          title: s.release || s.fileName || s.title,
           onClick: () => void downloadWeb(s),
-        }, `${s.fileName.slice(0, 42)}${s.downloads ? ` · ⬇${s.downloads}` : ''}${s.rating ? ` · ★${s.rating.toFixed(1)}` : ''}`))) : null,
+        }, s.provider === 'subtitlecat'
+          ? (s.url
+            ? `${s.lang} · ${s.fileName.slice(0, 36)}`
+            : `[SC] ${s.title.slice(0, 44)}`)
+          : `${s.fileName.slice(0, 42)}${s.downloads ? ` · ⬇${s.downloads}` : ''}${s.rating ? ` · ★${s.rating.toFixed(1)}` : ''}`))) : null,
       web?.message ? h('div', { className: 'empty' }, web.message) : null,
       h('div', { className: 'sep' }),
       h('button', { className: 'item', onClick: () => fileRef.current?.click() }, '📂 加载本地字幕（srt/vtt）'),

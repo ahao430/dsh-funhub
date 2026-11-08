@@ -749,7 +749,7 @@ function VideoSourceSection() {
           keySet ? h('span', { className: 'fh-chip', style: { color: 'var(--fh-good)' } }, '已配置') : null,
           h(Btn, { onClick: saveOsKey, disabled: !osKey.trim() && !keySet }, '保存')),
         h('div', { className: 'fh-muted', style: { fontSize: 11.5, marginTop: 6 } },
-          '选填。在 opensubtitles.com 免费注册后于「API Keys」页生成；播放器字幕菜单会出现「公共字幕站搜索」。下载配额免费档 20 次/天。'),
+          '选填。不填也能用：字幕菜单自带免 Key 的 SubtitleCat 公共源（中文变体优先）。填入后额外启用 OpenSubtitles（opensubtitles.com 免费注册，API Keys 页生成，免费档 20 次下载/天）。'),
       )
     })(),
 

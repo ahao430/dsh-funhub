@@ -7,7 +7,7 @@ import { newId } from './store.js'
 import { safeFetchBuffer, safeFetchJson, safeFetchLx, safeFetchText, assertSafeUrl, assertPublicHost, FetchError, setOutboundProxy, makeProxyDispatcher, fetchViaProxy } from './fetcher.js'
 import { parseFeed, repairEscapedHtml } from './rss.js'
 import { embyValidate, embyAuthByName, embyViews, embyItems, embyEpisodes, embyDetail, embyStreamUrl, embyHlsUrl, embyPosterUrl, embySubtitleUrl, embyRemoteSubtitles, embyDownloadSubtitle, rewriteM3u8 } from './video.js'
-import { webSearchSubtitles, webDownloadSubtitle } from './subtitle-search.js'
+import { webSearchSubtitles, webDownloadSubtitle, scSearch, scVariants, scDownload } from './subtitle-search.js'
 import { sanitizeHtml } from './sanitize.js'
 import { novelSearch, novelPopular, novelDetail, novelContent, imageFeed, musicSearch, musicTracks } from './proxy.js'
 import { legadoSearch, legadoExplore, exploreCategories, legadoDetail, legadoToc, legadoContent, sourceCompatibility } from './legado.js'
@@ -917,22 +917,32 @@ export async function route(ctx, store, req, res) {
       return json(res, 200, { ok: true, message: '字幕已下载挂载，正在刷新播放器' })
     }
     if (path === 'video/subtitles/web-search' && method === 'GET') {
-      // 公共字幕站（OpenSubtitles API）：Key 存宿主 settings，不下发浏览器
+      // 公共字幕站合并搜索：SubtitleCat（免 Key，恒开）+ OpenSubtitles（有 Key 才查）
       const st = await store.read()
       const apiKey = String(st.settings?.video?.subtitleProviders?.opensubtitlesKey || '').trim()
       const kw = (url.searchParams.get('kw') || '').trim()
       const lang = (url.searchParams.get('lang') || 'zh-cn').trim()
       const season = Number(url.searchParams.get('season')) || null
       const episode = Number(url.searchParams.get('episode')) || null
-      try {
-        const list = await webSearchSubtitles(kw, { apiKey, lang, season, episode })
-        return json(res, 200, { ok: true, list })
-      } catch (err) {
-        return json(res, 200, { ok: true, list: [], message: err.message, needKey: err.status === 400 && /API Key/.test(err.message) })
-      }
+      const list = []
+      const messages = []
+      const os = await webSearchSubtitles(kw, { apiKey, lang, season, episode }).catch((err) => { messages.push(`OpenSubtitles：${err.message}`); return [] })
+      const sc = await scSearch(kw).catch((err) => { messages.push(`SubtitleCat：${err.message}`); return [] })
+      list.push(...os.map((s) => ({ ...s, provider: 'opensubtitles' })), ...sc)
+      return json(res, 200, { ok: true, list, message: messages.join('；') || null })
+    }
+    if (path === 'video/subtitles/web-detail' && method === 'POST') {
+      // SubtitleCat 详情页 → 语言变体列表（中文排前）
+      const body = await readJson(req)
+      const variants = await scVariants(String(body.detailUrl || ''))
+      return json(res, 200, { ok: true, list: variants })
     }
     if (path === 'video/subtitles/web-download' && method === 'POST') {
       const body = await readJson(req)
+      if (body.provider === 'subtitlecat') {
+        const vtt = await scDownload(String(body.url || ''))
+        return json(res, 200, { ok: true, kind: 'vtt', vtt, filename: decodeURIComponent(String(body.url || '').split('/').pop() || 'subtitle.srt') })
+      }
       const st = await store.read()
       const apiKey = String(st.settings?.video?.subtitleProviders?.opensubtitlesKey || '').trim()
       const r = await webDownloadSubtitle(apiKey, String(body.fileId || ''))

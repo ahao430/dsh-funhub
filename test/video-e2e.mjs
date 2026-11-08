@@ -59,6 +59,16 @@ globalThis.fetch = async (input, init = {}) => {
   }
   if (u.includes('93.184.215.37/chs.srt')) return new Response('1\n00:00:01,000 --> 00:00:03,000\n你好世界\n', { status: 200, headers: { 'content-type': 'text/plain' } })
   if (u.includes('93.184.215.37/pack.zip')) return new Response(Buffer.from([0x50, 0x4b, 0x03, 0x04]), { status: 200, headers: { 'content-type': 'application/zip' } })
+  /* SubtitleCat（免 Key 提供方）stub */
+  if (u.includes('subtitlecat.com/index.php?search=')) {
+    return new Response('<table><tr><td>xx</td></tr><tr><td><a href="subs/1/Test.Movie.html">Test.Movie 2024</a> (translated from Japanese)</td><td></td><td></td><td></td><td></td></tr><tr><td><a href="subs/2/另一部.html">另一部剧</a></td><td></td><td></td><td></td><td></td></tr></table>', { status: 200, headers: { 'content-type': 'text/html' } })
+  }
+  if (u.includes('subtitlecat.com/subs/1/Test.Movie-zh-CN.srt')) {
+    return new Response('1\n00:00:01,000 --> 00:00:03,000\n字幕站中文台词\n', { status: 200, headers: { 'content-type': 'text/plain' } })
+  }
+  if (u.includes('subtitlecat.com/subs/1/Test.Movie.html')) {
+    return new Response('<html><body><a href="/subs/1/Test.Movie-zh-CN.srt">中文</a><a href="/subs/1/Test.Movie-en.srt">English</a><a href="/subs/1/Test.Movie-ja.srt">日本語</a></body></html>', { status: 200, headers: { 'content-type': 'text/html' } })
+  }
   if (u.includes('/Subtitles/')) return new Response('WEBVTT\n\n00:00.000 --> 00:01.000\neng\n', { status: 200, headers: { 'content-type': 'text/vtt' } })
   // 通用字节流（海报/视频段）
   return new Response(Buffer.from('DATA'), { status: 200, headers: { 'content-type': 'application/octet-stream' } })
@@ -156,7 +166,7 @@ try {
   await call('op', 'POST', { op: 'settings_save', settings: { video: { subtitleProviders: { opensubtitlesKey: 'osk-test' } } } })
   const osSearch = await call('video/subtitles/web-search?kw=测试剧&lang=zh-cn&season=1&episode=1')
   const osList = osSearch.json().list
-  assert.equal(osList.length, 2, 'OpenSubtitles 搜索映射')
+  assert.equal(osList.length, 4, '合并搜索：OS 2 + SC 2')
   assert.equal(osList[0].fileId, '9001')
   assert.equal(osList[0].fileName, 'Test.S01E01.CHS.srt')
   assert.equal(osList[0].season, 1)
@@ -166,6 +176,24 @@ try {
   const osDl2 = await call('video/subtitles/web-download', 'POST', { fileId: '9002' })
   assert.equal(osDl2.json().kind, 'archive')
   assert.ok(osDl2.json().base64.length > 0, '压缩包 base64 落盘')
+
+  /* SubtitleCat 免 Key 流程：合并搜索 → 详情变体（中文排前）→ srt 下载转 vtt */
+  const merged = await call('video/subtitles/web-search?kw=测试&lang=zh-cn')
+  const mergedList = merged.json().list
+  assert.ok(mergedList.length >= 3, `合并搜索 ≥3（OS 2 + SC 1），实际 ${mergedList.length}`)
+  const scItem = mergedList.find((s) => s.provider === 'subtitlecat')
+  assert.ok(scItem, 'SubtitleCat 条目在合并列表中')
+  assert.ok(scItem.detailUrl.includes('subtitlecat.com'), '详情页地址')
+  const vars = await call('video/subtitles/web-detail', 'POST', { detailUrl: scItem.detailUrl })
+  const scVariants = vars.json().list
+  assert.equal(scVariants.length, 3, "3 个语言变体")
+  assert.equal(scVariants[0].lang, "zh-CN", "中文变体排最前")
+  const scDl = await call('video/subtitles/web-download', 'POST', { provider: 'subtitlecat', url: scVariants[0].url })
+  assert.equal(scDl.json().kind, 'vtt')
+  assert.ok(scDl.json().vtt.includes('字幕站中文台词'), 'srt 已转 vtt')
+  // 非法地址拒绝
+  const bad = await call('video/subtitles/web-detail', 'POST', { detailUrl: 'https://93.184.215.37/x' })
+  assert.notEqual(bad.statusCode, 200, '非 subtitlecat.com 域名被拒')
 
   /* HLS 代理链：master 重写 → 子列表重写 → 分片 stream 直通（MPEG-TS 魔数） */
   const hlsMasterUrl = epd.sources[0].hlsUrl.replace('/funhub/api/video/m3u8?u=', '')

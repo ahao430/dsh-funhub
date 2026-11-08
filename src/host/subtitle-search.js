@@ -1,7 +1,8 @@
 // 公共字幕站检索：OpenSubtitles 官方 API（全球最大字幕库，免费注册 Key；用户在 设置 → 影视源 里填入，不内置）。
 // 下载：file_id 换直链 → 拉文件 → srt/ass 宿主转 vtt 直接挂播放器；zip/rar 压缩包原样给浏览器手动解压。
 // 说明：zimuku 等中文站已上反爬 JS 挑战（实测纯后端抓不到内容），故走官方 API 路线。
-import { safeFetchJson, safeFetchBytes, FetchError } from './fetcher.js'
+import { parse } from 'node-html-parser'
+import { safeFetchJson, safeFetchBytes, safeFetchText, FetchError } from './fetcher.js'
 
 const API = 'https://api.opensubtitles.com/api/v1'
 
@@ -107,4 +108,63 @@ function fmt(sec) {
   const ms = Math.round((sec - Math.floor(sec)) * 1000)
   const p = (n, w = 2) => String(n).padStart(w, '0')
   return `${p(h)}:${p(m)}:${p(s)}.${p(ms, 3)}`
+}
+
+/* ================= SubtitleCat（免 Key 提供方） ================= */
+
+const SC_BASE = 'https://www.subtitlecat.com'
+const SC_HEADERS = {
+  'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+  'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
+  accept: 'text/html,*/*',
+}
+const isScUrl = (u) => /^https:\/\/(www\.)?subtitlecat\.com\//.test(String(u || ''))
+
+/** 搜索：返回详情页列表（语言变体在详情页，点开再取）。 */
+export async function scSearch(kw) {
+  if (!kw) throw new FetchError('缺少搜索关键词', 400)
+  const html = await safeFetchText(`${SC_BASE}/index.php?search=${encodeURIComponent(kw)}`, {
+    timeout: 15_000, maxSize: 3_000_000, headers: SC_HEADERS,
+  })
+  const root = parse(html)
+  const out = []
+  for (const tr of root.querySelectorAll('table tr')) {
+    const a = tr.querySelector('a[href^="subs/"]')
+    if (!a) continue
+    const href = a.getAttribute('href') || ''
+    const title = (a.text || '').trim().slice(0, 80)
+    if (!href || !title) continue
+    out.push({ provider: 'subtitlecat', title, detailUrl: new URL(href, `${SC_BASE}/`).toString() })
+    if (out.length >= 8) break
+  }
+  return out
+}
+
+/** 详情页 → 各语言 .srt 直链（中文变体排最前）。 */
+export async function scVariants(detailUrl) {
+  if (!isScUrl(detailUrl)) throw new FetchError('非法的字幕站地址', 400)
+  const html = await safeFetchText(detailUrl, { timeout: 15_000, maxSize: 3_000_000, headers: SC_HEADERS })
+  const root = parse(html)
+  const seen = new Set()
+  const out = []
+  for (const a of root.querySelectorAll('a[href*=".srt"]')) {
+    const href = a.getAttribute('href') || ''
+    const abs = new URL(href, `${detailUrl}`).toString()
+    if (!isScUrl(abs) || seen.has(abs)) continue
+    seen.add(abs)
+    const m = /-([a-zA-Z]{2,3}(?:-[A-Za-z]{2,3})?)\.srt/.exec(href)
+    const lang = m ? m[1] : 'sub'
+    out.push({ provider: 'subtitlecat', lang, url: abs, fileName: decodeURIComponent(abs.split('/').pop() || 'subtitle.srt') })
+    if (out.length >= 14) break
+  }
+  out.sort((x, y) => Number(/^zh/i.test(y.lang)) - Number(/^zh/i.test(x.lang)))
+  return out
+}
+
+/** 下载 srt 并转 vtt。 */
+export async function scDownload(url) {
+  if (!isScUrl(url)) throw new FetchError('非法的字幕站地址', 400)
+  const text = await safeFetchText(url, { timeout: 20_000, maxSize: 8_000_000, headers: SC_HEADERS })
+  if (/^\s*WEBVTT/.test(text)) return text
+  return srtToVtt(text)
 }
