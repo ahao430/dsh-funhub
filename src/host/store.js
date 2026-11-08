@@ -5,6 +5,7 @@
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { sourceCompatibility } from './legado.js'
 
 export function dshHome(env = process.env) {
   return env.DSH_HOME || join(homedir(), '.dsh')
@@ -115,6 +116,18 @@ export function migrate(state) {
       if (!prev || (s.addedAt || 0) >= (prev.addedAt || 0)) seen.set(k, s)
     }
     next.comicSources = [...seen.values()]
+  }
+  // 兼容判定升级（JS 规则已由沙箱子集支持）：重算书源兼容标记，旧版被判死的 JS 源恢复参与探测
+  if (Array.isArray(next.bookSources)) {
+    for (const b of next.bookSources) {
+      if (b?.raw && typeof b.raw === 'object') {
+        try {
+          const c = sourceCompatibility(b.raw)
+          b.compatible = c.compatible
+          b.issues = c.issues
+        } catch { /* 单个源计算失败保持原值 */ }
+      }
+    }
   }
   return next
 }

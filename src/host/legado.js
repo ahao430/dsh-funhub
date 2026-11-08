@@ -8,10 +8,34 @@
 //   操作符       ||（回退） &&（合并） ##pat##rep##（正则替换，可省略尾 ##）
 //   模板         {{key}} {{page}} {{$.field}}（URL 与字段模板）
 //   URL 选项     searchUrl 末尾 ,{"method":"POST","body":"...","charset":"utf-8"}
-// 不支持：<js>...</js>、@js:、java.*、登录、验证码 —— 导入时能力检测会标记为「不兼容」。
+//   JS 子集      <js>…</js> / @js: / {{}} 内表达式 / JS 生成 URL —— node:vm 沙箱 + java.* 常用助手
+//                 （网络类助手走同步子进程 + 宿主安全抓取通道；真实可用性以「检测」探测为准）
+// 不支持：登录、验证码 —— 导入时能力检测会标记为「不兼容」。
 import { parse } from 'node-html-parser'
 import { safeFetchText, FetchError } from './fetcher.js'
 import { sanitizeHtml } from './sanitize.js'
+import { extractJsCode, runRuleJs } from './legado-js.js'
+
+/* JS 规则的 put/get 变量存储：按源隔离（模拟 Legado 跨步骤传值，进程内生命周期） */
+const jsKvStore = new Map()
+function jsKvFor(source) {
+  const k = source?.bookSourceUrl || '_'
+  if (!jsKvStore.has(k)) jsKvStore.set(k, new Map())
+  if (jsKvStore.get(k).size > 200) jsKvStore.get(k).clear()
+  return jsKvStore.get(k)
+}
+
+/** 在规则上下文里执行一段 JS（<js>/@js: 抽码 + result/baseUrl/java 助手绑定）。 */
+function runJsInCtx(code, ctx) {
+  const source = ctx.source || {}
+  const result = ctx.raw ?? (ctx.json !== undefined ? JSON.stringify(ctx.json) : ctx.root ? (ctx.root.outerHTML || '') : '')
+  return runRuleJs(code, {
+    result, baseUrl: ctx.baseUrl || source.bookSourceUrl || '', source,
+    key: ctx.key || '', page: ctx.page || 1,
+    kv: jsKvFor(source), headers: parseHeaders(source),
+    onGetString: (r) => evalRule(r, ctx),
+  })
+}
 
 /* ---------------- 通用工具 ---------------- */
 
@@ -22,14 +46,12 @@ export function ruleUsesJs(rule) {
 
 export function sourceCompatibility(source) {
   const issues = []
-  const check = (rule, where) => {
-    if (ruleUsesJs(rule)) issues.push(`${where} 使用 JS 规则`)
-  }
+  // JS 规则已由 legado-js 沙箱子集支持（真实可用性以探测为准），不再静态判死
   const rules = [source.searchUrl, source.exploreUrl, source.loginUrl]
-  for (const [key, rule] of Object.entries(source.ruleSearch || {})) rules.push(rule), check(rule, `搜索.${key}`)
-  for (const [key, rule] of Object.entries(source.ruleBookInfo || {})) check(rule, `详情.${key}`)
-  for (const [key, rule] of Object.entries(source.ruleToc || {})) check(rule, `目录.${key}`)
-  for (const [key, rule] of Object.entries(source.ruleContent || {})) check(rule, `正文.${key}`)
+  for (const [key, rule] of Object.entries(source.ruleSearch || {})) rules.push(rule)
+  for (const rule of Object.values(source.ruleBookInfo || {})) rules.push(rule)
+  for (const rule of Object.values(source.ruleToc || {})) rules.push(rule)
+  for (const rule of Object.values(source.ruleContent || {})) rules.push(rule)
   if (source.loginUrl) issues.push('需要登录/密钥')
   return { compatible: issues.length === 0, issues: [...new Set(issues)].slice(0, 8) }
 }
@@ -211,7 +233,8 @@ export function evalRule(rule, ctx) {
 
 function evalSingle(rule, ctx) {
   if (!rule) return undefined
-  if (ruleUsesJs(rule)) throw new FetchError('该规则使用了 JS 脚本，当前引擎不支持', 400)
+  // JS 规则段：<js>…</js> / @js: 前缀（沙箱执行，result 绑定页面原文或上下文 JSON/HTML）
+  if (ruleUsesJs(rule)) return runJsInCtx(extractJsCode(rule), ctx)
   if (rule.includes('{{')) return evalTemplate(rule, ctx)
   // JSON 路径
   if (rule.startsWith('$')) return jsonPath(ctx.json, rule)
@@ -236,13 +259,18 @@ function evalSingle(rule, ctx) {
   return nodes.map((n) => terminalValue(n, terminal)).filter(Boolean)
 }
 
-/** {{key}}/{{page}}/{{$.field}} 模板。 */
+/** {{key}}/{{page}}/{{$.field}} 模板；{{}} 内含 JS（@js:/<js>/java.*）时走沙箱求值。 */
 export function evalTemplate(template, ctx) {
   if (typeof template !== 'string') return template
   return template.replace(/\{\{(.+?)\}\}/g, (_, inner) => {
     const key = inner.trim()
     if (key === 'key') return ctx.key ?? ''
     if (key === 'page') return ctx.page ?? 1
+    if (ruleUsesJs(key) || /\bjava\.\w/.test(key)) {
+      // @js: / <js> 包裹 → 抽码；java.xxx(...) 裸表达式 → 原样作为 JS 执行
+      const code = ruleUsesJs(key) ? extractJsCode(key) : key
+      return String(runJsInCtx(code, ctx) ?? '')
+    }
     const value = evalRule(key, ctx)
     return value == null ? '' : String(value)
   })
@@ -302,8 +330,13 @@ function absolute(url, base) {
 
 async function fetchSourcePage(source, rawUrl, ctx, { maxSize = 6_000_000 } = {}) {
   if (!rawUrl) throw new FetchError('缺少 URL', 400)
-  if (ruleUsesJs(rawUrl)) throw new FetchError('该 URL 规则使用了 JS，当前引擎不支持', 400)
-  const { url, options } = buildUrl(rawUrl, ctx)
+  let urlSpec = String(rawUrl)
+  // JS 生成的 URL（如签名/参数计算）：沙箱求值后仍是普通 URL（可带 ,{options} 尾段）
+  if (ruleUsesJs(urlSpec)) {
+    urlSpec = String(runJsInCtx(extractJsCode(urlSpec), { ...ctx, baseUrl: source.bookSourceUrl, source }) || '')
+    if (!urlSpec.trim()) throw new FetchError('JS URL 规则未能生成地址', 400)
+  }
+  const { url, options } = buildUrl(urlSpec, ctx)
   const finalUrl = absolute(url, source.bookSourceUrl)
   const headers = { ...parseHeaders(source), ...(options.headers || {}) }
   const method = (options.method || 'GET').toUpperCase()
@@ -318,12 +351,13 @@ async function fetchSourcePage(source, rawUrl, ctx, { maxSize = 6_000_000 } = {}
 
 function makeContext(text) {
   const trimmed = text.trim()
+  // raw 供 JS 规则的 result 变量使用（页面原文）
   if (/^[{[]/.test(trimmed)) {
     try {
-      return { json: JSON.parse(trimmed) }
+      return { json: JSON.parse(trimmed), raw: trimmed }
     } catch { /* 按 HTML 处理 */ }
   }
-  return { root: parse(text) }
+  return { root: parse(text), raw: text }
 }
 
 /* ---------------- 对外流程 ---------------- */
@@ -352,8 +386,8 @@ function parseBookList(base, rules, listRule, source) {
   const books = []
   for (let i = 0; i < Math.min(count, 30); i++) {
     const itemCtx = jsonItems
-      ? { json: jsonItems[i], baseUrl: sourceUrl }
-      : { root: htmlNodes[i], baseUrl: sourceUrl }
+      ? { json: jsonItems[i], baseUrl: sourceUrl, source, raw: JSON.stringify(jsonItems[i]) }
+      : { root: htmlNodes[i], baseUrl: sourceUrl, source, raw: htmlNodes[i].outerHTML || '' }
     const name = itemField(rules, 'name', itemCtx)
     const bookUrlRaw = itemField(rules, 'bookUrl', itemCtx)
     if (!name && !bookUrlRaw) continue
@@ -375,8 +409,7 @@ function parseBookList(base, rules, listRule, source) {
 /** 书源搜索。 */
 export async function legadoSearch(source, key, page = 1) {
   if (!source.searchUrl) throw new FetchError('书源缺少 searchUrl', 400)
-  if (ruleUsesJs(source.searchUrl)) throw new FetchError('该书源搜索使用了 JS 规则，当前引擎不支持', 400)
-  const { text } = await fetchSourcePage(source, source.searchUrl, { key, page })
+  const { text } = await fetchSourcePage(source, source.searchUrl, { key, page, source })
   const base = makeContext(text)
   const rules = source.ruleSearch || {}
   const listRule = rules.bookList
@@ -393,46 +426,45 @@ export function exploreCategories(source) {
   // 没有发现列表规则（ruleExplore.bookList）就无法解析发现结果：
   // 视为无发现能力，避免发现下拉里出现必然报错「缺少发现列表规则」的源
   if (!source.ruleExplore?.bookList) return []
-  if (!raw || ruleUsesJs(String(raw))) return []
+  if (!raw) return []
   const text = String(raw).trim()
   if (text.startsWith('[')) {
     try {
       const arr = JSON.parse(text.replace(/,(\s*[\]}])/g, '$1'))
       if (Array.isArray(arr)) {
         return arr
-          .filter((e) => e && typeof e === 'object' && typeof e.url === 'string' && e.url.trim() && !ruleUsesJs(e.url))
+          .filter((e) => e && typeof e === 'object' && typeof e.url === 'string' && e.url.trim())
           .map((e) => ({ title: String(e.title || '未命名').slice(0, 24), url: e.url.trim() }))
           .slice(0, 200)
       }
     } catch { /* 非法 JSON，按整串处理 */ }
   }
-  if (ruleUsesJs(text)) return []
   return [{ title: '发现', url: text }]
 }
 
 /** 书源发现：按分类 URL + 页码取书列表（ruleExplore 与 ruleSearch 同构）。 */
 export async function legadoExplore(source, explorePath, page = 1) {
   if (!explorePath) throw new FetchError('缺少发现分类 URL', 400)
-  if (ruleUsesJs(explorePath)) throw new FetchError('该发现分类使用了 JS 规则，当前引擎不支持', 400)
   const rules = source.ruleExplore || {}
   const listRule = rules.bookList
   if (!listRule) throw new FetchError('书源缺少发现列表规则（ruleExplore.bookList）', 400)
-  const { text } = await fetchSourcePage(source, explorePath, { key: '', page })
+  const { text } = await fetchSourcePage(source, explorePath, { key: '', page, source })
   const base = makeContext(text)
   return parseBookList(base, rules, listRule, source)
 }
 
 /** 书籍详情（含目录地址）。 */
 export async function legadoDetail(source, bookUrl) {
-  const { text, finalUrl } = await fetchSourcePage(source, bookUrl, {})
+  const { text, finalUrl } = await fetchSourcePage(source, bookUrl, { source })
   let ctx = makeContext(text)
   ctx.baseUrl = finalUrl
+  ctx.source = source
   const rules = source.ruleBookInfo || {}
   const initRule = rules.init
-  if (initRule && !ruleUsesJs(initRule)) {
+  if (initRule) {
     // init 规则直接取 JSON 子对象（不经 evalRule 的字符串化）
-    const initValue = initRule.startsWith('$') && ctx.json ? jsonPath(ctx.json, initRule) : evalRule(initRule, ctx)
-    if (initValue && typeof initValue === 'object' && !Array.isArray(initValue)) ctx = { json: initValue, baseUrl: finalUrl }
+    const initValue = initRule.startsWith('$') && !ruleUsesJs(initRule) && ctx.json ? jsonPath(ctx.json, initRule) : evalRule(initRule, ctx)
+    if (initValue && typeof initValue === 'object' && !Array.isArray(initValue)) ctx = { json: initValue, baseUrl: finalUrl, source, raw: text }
   }
   const get = (key) => {
     const raw = rules[key]
@@ -458,9 +490,10 @@ export async function legadoDetail(source, bookUrl) {
 
 /** 章节目录。 */
 export async function legadoToc(source, tocUrl) {
-  const { text, finalUrl } = await fetchSourcePage(source, tocUrl, {})
+  const { text, finalUrl } = await fetchSourcePage(source, tocUrl, { source })
   const ctx = makeContext(text)
   ctx.baseUrl = finalUrl
+  ctx.source = source
   const rules = source.ruleToc || {}
   const listRule = rules.chapterList
   if (!listRule) throw new FetchError('书源缺少目录列表规则', 400)
@@ -486,9 +519,10 @@ export async function legadoToc(source, tocUrl) {
 
 /** 章节正文：HTML → 分段纯文本（渲染前已剥离全部标签）。 */
 export async function legadoContent(source, chapterUrl) {
-  const { text, finalUrl } = await fetchSourcePage(source, chapterUrl, { maxSize: 4_000_000 })
+  const { text, finalUrl } = await fetchSourcePage(source, chapterUrl, { source }, { maxSize: 4_000_000 })
   const ctx = makeContext(text)
   ctx.baseUrl = finalUrl
+  ctx.source = source
   const rule = source.ruleContent?.content
   if (!rule) throw new FetchError('书源缺少正文规则', 400)
   const value = evalRule(rule, ctx)

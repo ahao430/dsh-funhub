@@ -234,6 +234,13 @@ html.fh-light .fh-toast { box-shadow: 0 8px 30px rgba(20, 26, 40, .18); }
 .fh-tile-title { font-size: 12.5px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .fh-tile-sub { font-size: 11px; color: var(--fh-ink3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fh-rowlist { display: flex; flex-direction: column; }
+/* 小说最近阅读：横向封面条（鼠标滚轮横向滚动） */
+.fh-hstrip { display: flex; gap: 12px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: thin; }
+.fh-hstrip-item { flex: none; width: 96px; display: flex; flex-direction: column; gap: 6px; border: none; background: none; padding: 0; cursor: pointer; text-align: left; color: var(--fh-ink); }
+.fh-hstrip-cover { width: 96px; height: 128px; border-radius: 10px; object-fit: cover; background: var(--fh-panel-2); box-shadow: 0 6px 16px -10px #00000080; }
+.fh-hstrip-cover.ph { display: flex; align-items: center; justify-content: center; font-size: 30px; }
+.fh-hstrip-title { font-size: 12px; font-weight: 600; line-height: 1.35; height: 33px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.fh-hstrip-sub { font-size: 10.5px; color: var(--fh-ink3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fh-row { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: var(--fh-r-md); border: none; background: none; color: var(--fh-ink); text-align: left; cursor: pointer; font-size: 13px; }
 .fh-row:hover { background: var(--fh-panel-2); }
 .fh-row .num { width: 22px; color: var(--fh-ink3); font-size: 11.5px; text-align: right; flex: none; }

@@ -249,16 +249,23 @@ function DiscoverTab({ boot, onOpenDetail, onGotoTab }) {
           await actions.reload()
           actions.toast('已清空阅读历史')
         } }, '清空')),
-      h('div', { className: 'fh-rowlist' },
-        history.slice(0, 8).map((b) => h('button', { key: b.bookId, className: 'fh-row', onClick: () => actions.openNovel({
+      h('div', { className: 'fh-hstrip',
+        onMouseWheel: (e) => {
+          // 触控板自然横滑即可；鼠标竖滚轮在条内转为横向滚动
+          const el = e.currentTarget
+          if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { el.scrollLeft += e.deltaY; e.preventDefault() }
+        },
+      },
+        history.slice(0, 12).map((b) => h('button', { key: b.bookId, className: 'fh-hstrip-item', onClick: () => actions.openNovel({
           mode: b.sourceId === 'gutenberg' ? 'gutenberg' : 'legado',
           sourceId: b.sourceId, bookId: b.bookId, title: b.title, author: b.author || '', cover: b.cover || '',
           chapterIndex: b.chapterIndex || 0,
         }) },
-          b.cover ? h('img', { src: b.cover, alt: '', style: { width: 26, height: 36, borderRadius: 4, objectFit: 'cover', flex: 'none', background: 'var(--fh-panel-2)' }, onError: (e) => { e.currentTarget.style.visibility = 'hidden' } }) : h('span', { className: 'fh-mini-art', style: { width: 26, height: 26 } }, '📖'),
-          h('span', { className: 't' }, b.title),
-          h('span', { className: 's' }, b.chapterTitle || `第 ${(b.chapterIndex || 0) + 1} 章`),
-          h('span', { className: 's' }, fmtAgo(b.updatedAt)))))) : null,
+          b.cover
+            ? h('img', { className: 'fh-hstrip-cover', src: b.cover, alt: '', onError: (e) => { e.currentTarget.style.visibility = 'hidden' } })
+            : h('span', { className: 'fh-hstrip-cover ph' }, '📖'),
+          h('span', { className: 'fh-hstrip-title' }, b.title),
+          h('span', { className: 'fh-hstrip-sub' }, `${b.chapterTitle || `第 ${(b.chapterIndex || 0) + 1} 章`} · ${fmtAgo(b.updatedAt)}`))))) : null,
 
     /* 书源发现：RSS 式左列表选源（便于直接删除没内容的源），右侧分类 + 书墙 */
     exploreSources.length ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
