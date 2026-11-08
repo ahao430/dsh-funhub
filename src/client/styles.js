@@ -480,7 +480,7 @@ html.fh-light .fh-arcade { background: linear-gradient(120deg, #ffe3f0 0%, #e3f4
 .fh-soko-board { display: grid; gap: 2px; padding: 10px; border-radius: 14px;
   background: linear-gradient(150deg, #eef7e6, #e2efff); border: 1px solid #cfe0cc; }
 .fh-soko-cell { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; }
-.fh-soko-floor { width: 100%; height: 100%; border-radius: 8px; background: #ffffffb8;
+.fh-soko-floor { position: relative; width: 100%; height: 100%; border-radius: 8px; background: #ffffffb8;
   display: flex; align-items: center; justify-content: center; font-size: 17px; }
 .fh-soko-floor.alt { background: #f4f9ec; }
 .fh-soko-wall { width: 100%; height: 100%; border-radius: 8px;
