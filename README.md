@@ -19,17 +19,28 @@ DeepSeek Harness（DSH）插件：把小说 / 漫画 / 图片 / 音乐 / 影视 
 | 收藏 | 跨频道统一收藏入口 | 本地 |
 | 设置 | 源管理（导入 / 启停 / 删除 / 在线检测清理 / 一键清空，全部二次确认）、图片源 Key、网络代理、首页布局、数据导出清理 | 本地 |
 
-## 安装（本机 DSH desktop profile）
+## 安装
+
+### 方式一：插件市场 / npm 直装（推荐）
+
+FunHub 已发布到 npm（`dsh-funhub`）。在 DSH 的「插件」面板搜索 **dsh-funhub** 安装；或手动加进 desktop profile：
 
 ```sh
-# 1. 构建
-npm install && npm run build
+cd ~/.dsh/profiles/desktop
+pnpm add dsh-funhub
+# package.json 的 dsh.profile.bundles 数组加 "dsh-funhub"
+pnpm install && 重启 DeepSeek Harness
+```
 
-# 2. 在 ~/.dsh/profiles/desktop/package.json 加入
+### 方式二：从源码安装（开发者）
+
+```sh
+git clone https://github.com/ahao430/dsh-funhub.git
+cd dsh-funhub && npm install && npm run build
+
+# 在 ~/.dsh/profiles/desktop/package.json 加入
 #    "dependencies": { "dsh-funhub": "link:/绝对路径/dsh-funhub" }
 #    "dsh": { "profile": { "bundles": [ …, "dsh-funhub" ] } }
-
-# 3. 安装并重启应用
 cd ~/.dsh/profiles/desktop && pnpm install
 # 重启 DeepSeek Harness
 ```

@@ -1,9 +1,8 @@
 {
   "name": "dsh-funhub",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "DeepSeek Harness 娱乐工作台插件：小说 / 漫画 / 图片 / 音乐 / 小游戏 / RSS，多列卡片首页 + 全局音乐播放器，本地优先存储。",
   "type": "module",
-  "private": true,
   "license": "MIT",
   "main": "./src/host/index.js",
   "exports": {
@@ -33,7 +32,8 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "watch": "node scripts/build.mjs --watch",
-    "test": "node --test test/"
+    "test": "node --test test/",
+    "prepack": "npm run build"
   },
   "dependencies": {
     "node-html-parser": "^6.1.13",
@@ -48,6 +48,7 @@
   "files": [
     "src/host",
     "dist",
+    "assets",
     "cordis.patch.yml",
     "README.md"
   ]

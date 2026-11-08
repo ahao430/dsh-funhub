@@ -164,15 +164,14 @@
 <section id="install" style="background: var(--panel2);">
   <div class="wrap">
     <h2><span class="no">05</span>安装</h2>
-    <p class="lead">需要本机已安装 DeepSeek Harness 桌面版；插件以 link 方式装进 desktop profile。</p>
-<pre><b>git clone</b> https://github.com/ahao430/dsh-funhub.git
-<b>cd</b> dsh-funhub && npm install && npm run build
+    <p class="lead">已发布到 npm：在 DSH「插件」面板搜索 <strong>dsh-funhub</strong> 一键安装；或手动加进 desktop profile。</p>
+<pre><span style="color:var(--ink3)"># 方式一：插件市场搜索 dsh-funhub，或手动：</span>
+<b>cd</b> ~/.dsh/profiles/desktop && <b>pnpm add</b> dsh-funhub
+<span style="color:var(--ink3)"># package.json 的 dsh.profile.bundles 数组加 "dsh-funhub"</span>
 
-<span style="color:var(--ink3)"># ~/.dsh/profiles/desktop/package.json 的 dependencies 加：</span>
-<span style="color:var(--ink3)">#   "dsh-funhub": "link:/绝对路径/dsh-funhub"</span>
-<span style="color:var(--ink3)"># 同文件 dsh.profile.bundles 数组加 "dsh-funhub"</span>
+<span style="color:var(--ink3)"># 方式二（开发者）：git clone 后 link 本地路径</span>
+<span style="color:var(--ink3)"># 详见 README「安装」</span>
 
-<b>cd</b> ~/.dsh/profiles/desktop && pnpm install
 <span style="color:var(--ink3)"># 重启 DeepSeek Harness，侧栏出现 FunHub</span></pre>
     <p style="color:var(--ink2); font-size:13px; margin-top:10px;">装好后到各频道的「设置 → 源管理」导入你自己的内容源即可使用。</p>
   </div>
