@@ -1,0 +1,29 @@
+# 依赖与构建产物
+node_modules/
+dist/
+
+# 本地工具产物（非项目代码）
+out/
+out-gen/
+.v2c/
+.video_agent/
+mini-ide-out/
+
+# 个人数据 / 源配置（绝不入库）
+# - feeds.local.js：个人 RSS 订阅清单（scripts/add-rss-feeds.mjs 读取）
+# - state.json / *.local.json：宿主数据快照（书源/音源/漫画源/Emby 账密等全部在此）
+# - .env*：任何密钥文件
+scripts/feeds.local.js
+state.json
+*.local.json
+*.local.js
+.env
+.env.*
+
+# 素材中间产物（assets/ 只保留最终 webp）
+assets/raw/
+assets/src/
+
+# 系统与日志
+.DS_Store
+*.log

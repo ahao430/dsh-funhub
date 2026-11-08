@@ -1,0 +1,54 @@
+{
+  "name": "dsh-funhub",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness 娱乐工作台插件：小说 / 漫画 / 图片 / 音乐 / 小游戏 / RSS，多列卡片首页 + 全局音乐播放器，本地优先存储。",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "main": "./src/host/index.js",
+  "exports": {
+    ".": "./src/host/index.js",
+    "./client": "./dist/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.1-rc.5 <0.3.0"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "entertainment"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "node-html-parser": "^6.1.13",
+    "undici": "^7.30.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.10",
+    "jsdom": "^29.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "files": [
+    "src/host",
+    "dist",
+    "cordis.patch.yml",
+    "README.md"
+  ]
+}

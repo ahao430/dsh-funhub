@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FunHub — DSH 娱乐工作台插件</title>
+<meta name="description" content="DeepSeek Harness 插件：小说 / 漫画 / 图片 / 音乐 / 影视 / 小游戏 / RSS，本地优先的娱乐工作台。所有内容源由用户自行导入，配置只存在本机。">
+<style>
+  :root {
+    --bg: #0d1017; --panel: #161a23; --panel2: #1d2230; --line: #2a3040;
+    --ink: #e8eaf0; --ink2: #a8b0c0; --ink3: #6b7488;
+    --accent: #7c8cff; --accent2: #b44bff; --good: #2fbf8f; --danger: #ff7a6b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.7; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+  /* hero：暗色星云（与插件首页同款素材） */
+  .hero { position: relative; overflow: hidden; padding: 88px 0 72px; text-align: center;
+    background: linear-gradient(100deg, rgba(13,16,23,.55) 0%, rgba(13,16,23,.82) 55%, rgba(13,16,23,.94) 100%),
+      url("assets/home-bg.webp") center/cover; border-bottom: 1px solid var(--line); }
+  .hero .badge { display: inline-block; font-size: 12px; padding: 3px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink2); background: rgba(22,26,35,.6); margin-bottom: 18px; }
+  .hero h1 { font-size: clamp(30px, 5vw, 46px); letter-spacing: 1px; }
+  .hero h1 .grad { background: linear-gradient(120deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p.sub { color: var(--ink2); font-size: 16px; max-width: 640px; margin: 14px auto 0; }
+  .hero .cta { margin-top: 30px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn { display: inline-block; padding: 10px 22px; border-radius: 10px; font-size: 14.5px; border: 1px solid var(--line); background: var(--panel2); color: var(--ink); transition: transform .15s, box-shadow .15s; }
+  .btn:hover { text-decoration: none; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,.35); }
+  .btn.primary { background: linear-gradient(120deg, var(--accent), var(--accent2)); border: none; color: #fff; font-weight: 600; }
+  section { padding: 56px 0; }
+  h2 { font-size: 24px; margin-bottom: 8px; }
+  h2 .no { color: var(--accent); margin-right: 8px; font-family: ui-monospace, monospace; }
+  .lead { color: var(--ink2); margin-bottom: 28px; font-size: 14.5px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; }
+  .card h3 { font-size: 16px; margin-bottom: 6px; }
+  .card h3 .em { margin-right: 8px; }
+  .card p { color: var(--ink2); font-size: 13.5px; }
+  .card .src { margin-top: 10px; font-size: 12px; color: var(--ink3); }
+  .card .src b { color: var(--good); font-weight: 600; }
+  /* 素材展示带 */
+  .strip { display: flex; gap: 12px; overflow-x: auto; padding: 6px 2px 14px; }
+  .strip .shot { flex: none; width: 230px; height: 130px; border-radius: 12px; border: 1px solid var(--line); position: relative; overflow: hidden; background: var(--panel2); }
+  .strip .shot::after { content: attr(data-label); position: absolute; left: 10px; bottom: 8px; font-size: 11.5px; color: rgba(255,255,255,.92); text-shadow: 0 1px 6px rgba(0,0,0,.8); }
+  .bg-home { background: url("assets/home-bg.webp") center/cover; }
+  .bg-music { background: url("assets/music-bg.webp") center/cover; }
+  .bg-novel { background: url("assets/novel-bg.webp") center/cover; }
+  .bg-rss { background: url("assets/rss-bg.webp") center/cover; }
+  .bg-games { background: url("assets/games-bg.webp") center/cover; }
+  .bg-home-l { background: url("assets/home-bg-light.webp") center/cover; }
+  .bg-music-l { background: url("assets/music-bg-light.webp") center/cover; }
+  .bg-novel-l { background: url("assets/novel-bg-light.webp") center/cover; }
+  .bg-rss-l { background: url("assets/rss-bg-light.webp") center/cover; }
+  .bg-games-l { background: url("assets/games-bg-light.webp") center/cover; }
+  /* 贴纸墙 */
+  .stickers { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .stickers img { width: 64px; height: 64px; border-radius: 14px; background: #f6efe3; }
+  code, pre { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  pre { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; overflow-x: auto; font-size: 12.5px; color: var(--ink2); margin-top: 10px; }
+  pre b { color: var(--ink); font-weight: 600; }
+  .note { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--good); border-radius: 10px; padding: 16px 18px; font-size: 13.5px; color: var(--ink2); }
+  .note b { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th { color: var(--ink2); font-weight: 600; white-space: nowrap; }
+  td { color: var(--ink2); }
+  td:first-child { color: var(--ink); white-space: nowrap; }
+  footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--ink3); font-size: 12.5px; text-align: center; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f6f7fa; --panel: #fff; --panel2: #eef0f5; --line: #e0e3ec; --ink: #1c2230; --ink2: #4a5368; --ink3: #8b93a5; }
+    .hero { background: linear-gradient(100deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.85) 60%, rgba(246,247,250,.95) 100%), url("assets/home-bg-light.webp") center/cover; }
+    .hero .badge { background: rgba(255,255,255,.7); }
+    .stickers img { background: #fff; border: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="badge">DeepSeek Harness 插件 · 本地优先 · 开源自部署</span>
+    <h1>Fun<span class="grad">Hub</span> 娱乐工作台</h1>
+    <p class="sub">小说 · 漫画 · 图片 · 音乐 · 影视 · 八款小游戏 · RSS —— 一个 DSH 插件全装下。所有内容源由你自己导入，配置只存在你本机。</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/ahao430/dsh-funhub">GitHub 仓库</a>
+      <a class="btn" href="#install">安装方法</a>
+      <a class="btn" href="#privacy">数据与隐私</a>
+    </div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="wrap">
+    <h2><span class="no">01</span>九大板块</h2>
+    <p class="lead">首页卡片可拖拽调序 / 调尺寸 / 隐藏；每个频道都是完整可用的生产力（摸鱼力）工具。</p>
+    <div class="grid">
+      <div class="card"><h3><span class="em">📖</span>小说阅读</h3><p>书源搜索 / 发现、书架、历史、四主题阅读器、章末手动翻章、进度自动保存。</p><p class="src">来源：<b>阅读3.0 书源（用户自选）</b> + Gutenberg 公版书</p></div>
+      <div class="card"><h3><span class="em">📚</span>漫画</h3><p>venera 源发现（左列管理、失效随手删）、搜索、章节正倒序、滚动 / 单页阅读器。</p><p class="src">来源：<b>venera 漫画源（用户自选）</b></p></div>
+      <div class="card"><h3><span class="em">🎬</span>影视（Emby）</h3><p>剧集按目录归组、电影直连、mkv/hevc 自动服务器转码、页内播放器可全屏。</p><p class="src">来源：<b>你自己的 Emby 服务器</b></p></div>
+      <div class="card"><h3><span class="em">🎵</span>音乐</h3><p>网易 / 酷我搜索、洛雪音源解析直链、公版库、本地上传；全局四态播放器切页不断播。</p><p class="src">来源：<b>洛雪自定义源（用户自选）</b> + Internet Archive</p></div>
+      <div class="card"><h3><span class="em">🖼️</span>图片广场</h3><p>13 个图源瀑布流、搜索、全屏浏览、收藏；免 Key 源开箱即用。</p><p class="src">来源：Picsum / Bing / NASA 等 <b>免 Key 公共源</b> + 自配 Key 源</p></div>
+      <div class="card"><h3><span class="em">🎮</span>八款小游戏</h3><p>2048 · 扫雷 · 数独 · 俄罗斯方块（DAS 连发）· 翻翻乐 · 贪吃蛇 · 五子棋（禁手 + AI）· 推箱子（30 关），全套合成音效。</p><p class="src">来源：<b>内置自研</b>，成绩 / 存档本地保存</p></div>
+      <div class="card"><h3><span class="em">📰</span>RSS 阅读</h3><p>任意 RSS / Atom / RDF 订阅，左列管理、未读过滤、正文清洗渲染、文章收藏、热门推荐。</p><p class="src">来源：<b>你自己的订阅</b>（支持 rsshub:// 路由）</p></div>
+      <div class="card"><h3><span class="em">⭐</span>统一收藏</h3><p>图片 / 文章 / 音乐 / 书 / 漫画跨频道收藏，一个入口全找到。</p><p class="src">来源：<b>本地数据</b></p></div>
+      <div class="card"><h3><span class="em">🛡️</span>安全设计</h3><p>第三方源脚本在沙箱运行；出站请求统一走 SSRF 防护抓取器；外部 HTML 白名单清理。</p><p class="src">详见 <a href="https://github.com/ahao430/dsh-funhub#安全设计">README 安全设计</a></p></div>
+    </div>
+  </div>
+</section>
+
+<section id="art" style="background: var(--panel2);">
+  <div class="wrap">
+    <h2><span class="no">02</span>亮暗两套氛围背景</h2>
+    <p class="lead">AI 生成的成对背景：暗色深邃、亮色奶油，跟随主题自动切换（下面每行左暗右亮，本页也跟随你的系统主题）。</p>
+    <div class="strip">
+      <div class="shot bg-home" data-label="首页 · 暗色"></div>
+      <div class="shot bg-home-l" data-label="首页 · 亮色"></div>
+      <div class="shot bg-music" data-label="音乐 · 暗色"></div>
+      <div class="shot bg-music-l" data-label="音乐 · 亮色"></div>
+      <div class="shot bg-novel" data-label="小说 · 暗色"></div>
+      <div class="shot bg-novel-l" data-label="小说 · 亮色"></div>
+      <div class="shot bg-rss" data-label="RSS · 暗色"></div>
+      <div class="shot bg-rss-l" data-label="RSS · 亮色"></div>
+      <div class="shot bg-games" data-label="游戏 · 暗色"></div>
+      <div class="shot bg-games-l" data-label="游戏 · 亮色"></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="no">03</span>游戏贴纸</h2>
+    <p class="lead">18 张 AI 绘制的奶油底贴纸，统一可爱风：推箱子 / 贪吃蛇 / 翻翻乐全道具。</p>
+    <div class="stickers">
+      <img src="assets/soko-player.webp" alt="推箱子兔子"><img src="assets/soko-box.webp" alt="箱子"><img src="assets/soko-box-done.webp" alt="礼物箱"><img src="assets/soko-goal.webp" alt="目标点"><img src="assets/soko-wall.webp" alt="墙块">
+      <img src="assets/snake-head.webp" alt="蛇头"><img src="assets/snake-body.webp" alt="蛇身"><img src="assets/snake-food-apple.webp" alt="苹果"><img src="assets/snake-food-cake.webp" alt="蛋糕"><img src="assets/snake-food-berry.webp" alt="草莓">
+      <img src="assets/mem-cat.webp" alt="猫"><img src="assets/mem-dog.webp" alt="狗"><img src="assets/mem-rabbit.webp" alt="兔"><img src="assets/mem-bear.webp" alt="熊"><img src="assets/mem-panda.webp" alt="熊猫"><img src="assets/mem-fox.webp" alt="狐狸"><img src="assets/mem-penguin.webp" alt="企鹅"><img src="assets/mem-frog.webp" alt="青蛙">
+    </div>
+  </div>
+</section>
+
+<section id="install" style="background: var(--panel2);">
+  <div class="wrap">
+    <h2><span class="no">04</span>安装</h2>
+    <p class="lead">需要本机已安装 DeepSeek Harness 桌面版；插件以 link 方式装进 desktop profile。</p>
+<pre><b>git clone</b> https://github.com/ahao430/dsh-funhub.git
+<b>cd</b> dsh-funhub && npm install && npm run build
+
+<span style="color:var(--ink3)"># ~/.dsh/profiles/desktop/package.json 的 dependencies 加：</span>
+<span style="color:var(--ink3)">#   "dsh-funhub": "link:/绝对路径/dsh-funhub"</span>
+<span style="color:var(--ink3)"># 同文件 dsh.profile.bundles 数组加 "dsh-funhub"</span>
+
+<b>cd</b> ~/.dsh/profiles/desktop && pnpm install
+<span style="color:var(--ink3)"># 重启 DeepSeek Harness，侧栏出现 FunHub</span></pre>
+    <p style="color:var(--ink2); font-size:13px; margin-top:10px;">装好后到各频道的「设置 → 源管理」导入你自己的内容源即可使用。</p>
+  </div>
+</section>
+
+<section id="privacy">
+  <div class="wrap">
+    <h2><span class="no">05</span>数据与隐私</h2>
+    <p class="lead">FunHub 不内置任何内容源；你的源配置永远只在你本机。</p>
+    <div class="note" style="margin-bottom:18px;">
+      <b>所有源的配置（书源 / 漫画源 / 音源 / Emby 账密 / 图片 Key / RSS 订阅）都存在 <code>$DSH_HOME/funhub/state.json</code>（通常 <code>~/.dsh/funhub/</code>）</b>，不在本仓库、不进 git。仓库的 <code>.gitignore</code> 对 <code>state.json</code>、<code>*.local.json/js</code>、<code>.env*</code> 做了防御性排除。Emby 的 API Key 只留在宿主侧，浏览器端拿不到。
+    </div>
+    <table>
+      <tr><th>项目</th><th>位置</th><th>进 git？</th></tr>
+      <tr><td>源配置 / 账密 / 订阅</td><td><code>~/.dsh/funhub/state.json</code></td><td>❌ 永不</td></tr>
+      <tr><td>插件代码</td><td>本仓库 <code>src/</code></td><td>✅</td></tr>
+      <tr><td>AI 生成素材（背景 / 贴纸）</td><td>本仓库 <code>assets/*.webp</code></td><td>✅</td></tr>
+      <tr><td>个人 RSS 批量清单</td><td><code>scripts/feeds.local.js</code></td><td>❌ 已 ignore</td></tr>
+    </table>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    FunHub · <a href="https://github.com/ahao430/dsh-funhub">ahao430/dsh-funhub</a> · MIT License<br>
+    本页素材（背景 / 贴纸）均由 AI 生成，随仓库分发。
+  </div>
+</footer>
+
+</body>
+</html>

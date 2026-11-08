@@ -1,0 +1,5 @@
+# FunHub bundle patch：同一个包提供 host 半片（/funhub API + 数据存储 + 外部源代理）
+# 与浏览器半片（娱乐工作台 UI + 全局音乐播放器）。
+- insert:
+    - id: funhub
+      name: 'dsh-funhub'
