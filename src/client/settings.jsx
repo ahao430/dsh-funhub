@@ -672,6 +672,16 @@ function VideoSourceSection() {
   const [embyUserId, setEmbyUserId] = useState('')
   const [embyBusy, setEmbyBusy] = useState(false)
   const [manual, setManual] = useState(false)
+  // 公共字幕站（OpenSubtitles）Key
+  const [osKey, setOsKey] = useState('')
+  const saveOsKey = async () => {
+    try {
+      await api.op('settings_save', { settings: { video: { subtitleProviders: { opensubtitlesKey: osKey.trim() } } } })
+      setOsKey('')
+      await actions.reload()
+      actions.toast('OpenSubtitles Key 已保存')
+    } catch (err) { actions.toast(`保存失败：${err.message}`) }
+  }
 
   const addEmby = async () => {
     setEmbyBusy(true)
@@ -726,6 +736,22 @@ function VideoSourceSection() {
         h('span', { className: 'meta', title: s.url }, s.url),
         h('div', { className: 'fh-spacer' }),
         h('button', { className: 'fh-icon-btn', title: '删除', onClick: async () => { await api.op('video_emby_remove', { id: s.id }); await actions.reload() } }, h(Icon, { name: 'trash', size: 13 }))))) : h('div', { className: 'fh-muted', style: { fontSize: 12.5 } }, '尚未添加 Emby 服务器'),
+
+    /* 公共字幕源（OpenSubtitles）：Key 存宿主，不下发浏览器 */
+    (() => {
+      const keySet = Boolean(boot?.settings?.video?.subtitleProviders?.opensubtitlesKeySet)
+      return h('div', { style: { marginTop: 12, paddingTop: 12, borderTop: '1px dashed var(--fh-line)' } },
+        h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } },
+          h(Input, {
+            value: osKey, onChange: setOsKey, placeholder: 'OpenSubtitles API Key（公共字幕站搜索）',
+            style: { flex: 1, minWidth: 200 }, type: 'password',
+          }),
+          keySet ? h('span', { className: 'fh-chip', style: { color: 'var(--fh-good)' } }, '已配置') : null,
+          h(Btn, { onClick: saveOsKey, disabled: !osKey.trim() && !keySet }, '保存')),
+        h('div', { className: 'fh-muted', style: { fontSize: 11.5, marginTop: 6 } },
+          '选填。在 opensubtitles.com 免费注册后于「API Keys」页生成；播放器字幕菜单会出现「公共字幕站搜索」。下载配额免费档 20 次/天。'),
+      )
+    })(),
 
     confirmClear ? h(ClearSourcesModal, {
       what: 'Emby 服务器', count: embyServers.length, op: 'video_emby_clear',

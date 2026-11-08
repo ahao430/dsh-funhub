@@ -424,8 +424,15 @@ export const OPS = {
         port: Math.max(1, Math.min(65535, Number(settings.proxy.port) || 0)) || 7890,
       }
     }
+    if (settings?.video?.subtitleProviders && typeof settings.video.subtitleProviders === 'object') {
+      state.settings.video.subtitleProviders = {
+        ...(state.settings.video.subtitleProviders || {}),
+        opensubtitlesKey: String(settings.video.subtitleProviders.opensubtitlesKey || '').trim().slice(0, 80),
+      }
+    }
     if (settings?.music) state.music = { ...state.music, ...settings.music }
-    return { settings: state.settings, music: state.music }
+    // 返回值只带确认标记：settings 全量（含 Emby apiKey / 字幕站 Key）绝不经 /op 回传浏览器
+    return { saved: true }
   },
 
   /* ---- 阅读3.0 书源 ---- */

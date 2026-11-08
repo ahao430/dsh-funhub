@@ -274,3 +274,45 @@ export async function safeFetchBuffer(raw, opts = {}) {
   }
   return { buffer: Buffer.concat(chunks), contentType }
 }
+
+/** 通用字节抓取（字幕压缩包等二进制文件；与 safeFetchBuffer 相同防护，不限图片 content-type）。 */
+export async function safeFetchBytes(raw, opts = {}) {
+  const url = assertSafeUrl(raw)
+  await assertPublicHost(url.hostname)
+  const timeout = opts.timeout ?? 15_000
+  const maxSize = opts.maxSize ?? 12_000_000
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeout)
+  let res
+  try {
+    res = await fetchViaProxy(url, {
+      signal: controller.signal,
+      redirect: 'follow',
+      headers: {
+        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36 FunHub/0.1',
+        accept: '*/*',
+      },
+    })
+  } catch (err) {
+    clearTimeout(timer)
+    throw new FetchError(err.name === 'AbortError' ? '请求超时' : `网络请求失败：${err.message}`)
+  }
+  clearTimeout(timer)
+  if (!res.ok) throw new FetchError(`上游返回 ${res.status}`)
+  const len = Number(res.headers.get('content-length') || 0)
+  if (len > maxSize) throw new FetchError('响应过大', 413)
+  const reader = res.body.getReader()
+  const chunks = []
+  let size = 0
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    size += value.length
+    if (size > maxSize) {
+      await reader.cancel().catch(() => {})
+      throw new FetchError('响应过大', 413)
+    }
+    chunks.push(value)
+  }
+  return { buffer: Buffer.concat(chunks), contentType: res.headers.get('content-type') || '' }
+}

@@ -7,6 +7,7 @@ import { newId } from './store.js'
 import { safeFetchBuffer, safeFetchJson, safeFetchLx, safeFetchText, assertSafeUrl, assertPublicHost, FetchError, setOutboundProxy, makeProxyDispatcher, fetchViaProxy } from './fetcher.js'
 import { parseFeed, repairEscapedHtml } from './rss.js'
 import { embyValidate, embyAuthByName, embyViews, embyItems, embyEpisodes, embyDetail, embyStreamUrl, embyHlsUrl, embyPosterUrl, embySubtitleUrl, embyRemoteSubtitles, embyDownloadSubtitle, rewriteM3u8 } from './video.js'
+import { webSearchSubtitles, webDownloadSubtitle } from './subtitle-search.js'
 import { sanitizeHtml } from './sanitize.js'
 import { novelSearch, novelPopular, novelDetail, novelContent, imageFeed, musicSearch, musicTracks } from './proxy.js'
 import { legadoSearch, legadoExplore, exploreCategories, legadoDetail, legadoToc, legadoContent, sourceCompatibility } from './legado.js'
@@ -97,11 +98,14 @@ function publicState(state) {
         return { ...a, content: sanitizeHtml(fixed, { proxyImages: true }) }
       }),
     },
-    // Emby apiKey 只留在宿主，客户端只见服务器元数据
+    // Emby apiKey / 字幕站 API Key 只留在宿主，客户端只见元数据与「是否已配置」标记
     settings: {
       ...state.settings,
       video: {
         emby: (state.settings?.video?.emby || []).map((s) => ({ ...s, apiKey: undefined })),
+        subtitleProviders: {
+          opensubtitlesKeySet: Boolean(state.settings?.video?.subtitleProviders?.opensubtitlesKey),
+        },
       },
     },
   }
@@ -911,6 +915,28 @@ export async function route(ctx, store, req, res) {
       if (!itemId || !body.subId) return json(res, 400, { error: '缺少条目或字幕 id' })
       await embyDownloadSubtitle(server, itemId, { providerName: String(body.providerName || ''), id: String(body.subId), language: String(body.language || 'chi') })
       return json(res, 200, { ok: true, message: '字幕已下载挂载，正在刷新播放器' })
+    }
+    if (path === 'video/subtitles/web-search' && method === 'GET') {
+      // 公共字幕站（OpenSubtitles API）：Key 存宿主 settings，不下发浏览器
+      const st = await store.read()
+      const apiKey = String(st.settings?.video?.subtitleProviders?.opensubtitlesKey || '').trim()
+      const kw = (url.searchParams.get('kw') || '').trim()
+      const lang = (url.searchParams.get('lang') || 'zh-cn').trim()
+      const season = Number(url.searchParams.get('season')) || null
+      const episode = Number(url.searchParams.get('episode')) || null
+      try {
+        const list = await webSearchSubtitles(kw, { apiKey, lang, season, episode })
+        return json(res, 200, { ok: true, list })
+      } catch (err) {
+        return json(res, 200, { ok: true, list: [], message: err.message, needKey: err.status === 400 && /API Key/.test(err.message) })
+      }
+    }
+    if (path === 'video/subtitles/web-download' && method === 'POST') {
+      const body = await readJson(req)
+      const st = await store.read()
+      const apiKey = String(st.settings?.video?.subtitleProviders?.opensubtitlesKey || '').trim()
+      const r = await webDownloadSubtitle(apiKey, String(body.fileId || ''))
+      return json(res, 200, { ok: true, ...r })
     }
     if (path === 'video/m3u8' && method === 'GET') {
       // Emby HLS 转码代理：master/子播放列表重写（分片与密钥走 stream 代理），api_key 不出宿主

@@ -113,6 +113,7 @@ function EmbyTab({ servers }) {
         fallbackUrl: direct ? ms.hlsUrl : null,
         epId: ep.id,
         serverId, itemId: ep.id, msId: ms.id, subtitles: ms.subtitles || [],
+        searchKw: detail.it.name, season: ep.season, episode: ep.episode,
       })
       setDetail((prev) => ({ ...prev, epLoading: null }))
     } catch (err) {
@@ -130,6 +131,7 @@ function EmbyTab({ servers }) {
       fallbackUrl: direct ? ms.hlsUrl : null,
       epId: d.id,
       serverId, itemId: d.id, msId: ms.id, subtitles: ms.subtitles || [],
+      searchKw: d.name,
     })
   }
 
@@ -167,6 +169,7 @@ function EmbyTab({ servers }) {
       playing ? h(InlinePlayer, {
         title: playing.title, url: playing.url, fallbackUrl: playing.fallbackUrl,
         serverId: playing.serverId, itemId: playing.itemId, msId: playing.msId, subtitles: playing.subtitles,
+        searchKw: playing.searchKw, season: playing.season, episode: playing.episode,
         onRefresh: () => void refreshPlaying(),
         onClose: () => setPlaying(null),
       }) : null,

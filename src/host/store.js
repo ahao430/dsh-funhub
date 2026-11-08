@@ -90,7 +90,7 @@ export function migrate(state) {
   next.settings.lastSource = { ...defaultState().settings.lastSource, ...(state?.settings?.lastSource || {}) }
   next.settings.backgrounds = { ...defaultState().settings.backgrounds, ...(state?.settings?.backgrounds || {}) }
   next.settings.reader = { ...defaultState().settings.reader, ...(state?.settings?.reader || {}) }
-  next.settings.video = { emby: [], ...(state?.settings?.video || {}) }
+  next.settings.video = { emby: [], subtitleProviders: {}, ...(state?.settings?.video || {}) }
   delete next.settings.video.tvbox // TVBox 已移除：丢弃历史遗留的站点数据
   if (!Array.isArray(next.settings.video.emby)) next.settings.video.emby = []
   next.rss = { feeds: [], articles: [], ...(state?.rss || {}) }

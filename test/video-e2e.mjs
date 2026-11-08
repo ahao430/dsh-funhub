@@ -44,6 +44,21 @@ globalThis.fetch = async (input, init = {}) => {
   if (u.includes('/RemoteSearch/Subtitles/chi')) return jsonRes(REMOTE_SUBS) // 必须在 /Subtitles/ 兜底之前
   if (u.includes('/RemoteSearch/Subtitle')) return jsonRes({ ok: true })
   if (u.includes('/Subtitles/2/Stream.vtt')) return new Response(VTT_TEXT, { status: 200, headers: { 'content-type': 'text/vtt' } })
+  /* OpenSubtitles 公共字幕站（stub） */
+  if (u.includes('api.opensubtitles.com/api/v1/subtitles?')) {
+    return jsonRes({ data: [
+      { attributes: { feature_details: { title: '测试剧', season_number: 1, episode_number: 1 }, release: 'Test.S01E01.CHS', language: 'zh-cn', download_count: 88, ratings: 4.2, files: [{ file_id: 9001, file_name: 'Test.S01E01.CHS.srt' }] } },
+      { attributes: { feature_details: { title: '测试剧', season_number: 1, episode_number: 1 }, release: 'Test.PACK', language: 'zh-cn', download_count: 12, files: [{ file_id: 9002, file_name: 'Test.PACK.zip' }] } },
+    ] })
+  }
+  if (u.includes('api.opensubtitles.com/api/v1/download')) {
+    if (String(init?.body || '').includes('9002')) {
+      return jsonRes({ link: 'https://93.184.215.37/pack.zip', file_name: 'Test.PACK.zip' })
+    }
+    return jsonRes({ link: 'https://93.184.215.37/chs.srt', file_name: 'Test.S01E01.CHS.srt' })
+  }
+  if (u.includes('93.184.215.37/chs.srt')) return new Response('1\n00:00:01,000 --> 00:00:03,000\n你好世界\n', { status: 200, headers: { 'content-type': 'text/plain' } })
+  if (u.includes('93.184.215.37/pack.zip')) return new Response(Buffer.from([0x50, 0x4b, 0x03, 0x04]), { status: 200, headers: { 'content-type': 'application/zip' } })
   if (u.includes('/Subtitles/')) return new Response('WEBVTT\n\n00:00.000 --> 00:01.000\neng\n', { status: 200, headers: { 'content-type': 'text/vtt' } })
   // 通用字节流（海报/视频段）
   return new Response(Buffer.from('DATA'), { status: 200, headers: { 'content-type': 'application/octet-stream' } })
@@ -136,6 +151,21 @@ try {
   assert.equal(search.json().list[0].providerName, 'OpenSubtitles')
   const dl = await call('video/subtitles/download', 'POST', { server: st.emby[0].id, item: 'ep1', providerName: 'OpenSubtitles', subId: 'sub-1', language: 'chi' })
   assert.equal(dl.json().ok, true, '远程字幕下载挂载')
+
+  /* 公共字幕站（OpenSubtitles）：存 Key → 搜索映射 → srt 下载转 vtt → 压缩包 base64 */
+  await call('op', 'POST', { op: 'settings_save', settings: { video: { subtitleProviders: { opensubtitlesKey: 'osk-test' } } } })
+  const osSearch = await call('video/subtitles/web-search?kw=测试剧&lang=zh-cn&season=1&episode=1')
+  const osList = osSearch.json().list
+  assert.equal(osList.length, 2, 'OpenSubtitles 搜索映射')
+  assert.equal(osList[0].fileId, '9001')
+  assert.equal(osList[0].fileName, 'Test.S01E01.CHS.srt')
+  assert.equal(osList[0].season, 1)
+  const osDl = await call('video/subtitles/web-download', 'POST', { fileId: '9001' })
+  assert.equal(osDl.json().kind, 'vtt')
+  assert.ok(osDl.json().vtt.includes('WEBVTT') && osDl.json().vtt.includes('你好世界'), 'srt 宿主转 vtt')
+  const osDl2 = await call('video/subtitles/web-download', 'POST', { fileId: '9002' })
+  assert.equal(osDl2.json().kind, 'archive')
+  assert.ok(osDl2.json().base64.length > 0, '压缩包 base64 落盘')
 
   /* HLS 代理链：master 重写 → 子列表重写 → 分片 stream 直通（MPEG-TS 魔数） */
   const hlsMasterUrl = epd.sources[0].hlsUrl.replace('/funhub/api/video/m3u8?u=', '')
