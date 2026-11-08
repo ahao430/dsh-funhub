@@ -2,6 +2,7 @@
 // 直连 mp4 走流代理原生播放；m3u8 走宿主重写路由（分片已代理化），hls.js 直接啃该地址。
 import { useEffect, useRef, useState, createElement as h } from 'react'
 import { Icon } from './ui.jsx'
+import { api } from './api.js'
 
 const HLS_CDN = 'https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.mjs'
 
@@ -88,17 +89,190 @@ function FatalPanel({ fatal, fallback, fallbackLabel = '切换转码播放', act
       }, '复制链接给外部播放器')))
 }
 
+/* ================= 字幕 ================= */
+
+/** SRT → WebVTT（浏览器 <track> 只认 vtt；srt 时间戳逗号换点，补 WEBVTT 头）。 */
+export function srtToVtt(srt) {
+  const body = String(srt || '').replace(/^\uFEFF/, '').replace(/\r+/g, '')
+    .replace(/(\d{2}:\d{2}:\d{2}),(\d{1,3})/g, '$1.$2')
+  return `WEBVTT\n\n${body}`
+}
+
+/** 中文语言标记粗判（zh/chi/chn 及带地区后缀的变体）。 */
+function isZhLang(lang) {
+  return /^(zh|chi|chn|zho)\b/i.test(String(lang || ''))
+}
+
+/** 直连播放的 <track> 字幕：自动选中首选中文轨。 */
+function useNativeSubtitles(videoRef, subtitles, selected, localTracks) {
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    const apply = () => {
+      const tt = video.textTracks
+      for (let i = 0; i < tt.length; i++) {
+        const isLocal = i >= subtitles.length
+        const target = isLocal
+          ? (selected === `local:${i - subtitles.length}` ? 'showing' : 'disabled')
+          : (selected === i ? 'showing' : 'disabled')
+        if (tt[i].mode !== target) tt[i].mode = target
+      }
+    }
+    apply()
+    video.textTracks?.addEventListener?.('addtrack', apply)
+    video.textTracks?.addEventListener?.('change', apply)
+    return () => { video.textTracks?.removeEventListener?.('addtrack', apply); video.textTracks?.removeEventListener?.('change', apply) }
+  }, [videoRef, subtitles, selected, localTracks])
+}
+
+/** 字幕选择菜单：服务器轨 / 自动搜索下载（Emby 服务端）/ 本地字幕文件。 */
+function SubtitleMenu({ videoRef, subtitles, selected, setSelected, serverId, itemId, msId, isHls, onRefresh }) {
+  const [open, setOpen] = useState(false)
+  const [remote, setRemote] = useState(null) // 远程搜索结果 { list, message, unavailable }
+  const [remoteBusy, setRemoteBusy] = useState(false)
+  const fileRef = useRef(null)
+  const menuRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e) => { if (!menuRef.current?.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+
+  const searchRemote = async () => {
+    setRemoteBusy(true); setRemote(null)
+    try {
+      const r = await api.get(`/video/subtitles/search?server=${encodeURIComponent(serverId)}&item=${encodeURIComponent(itemId)}&lang=chi`)
+      setRemote(r.list?.length ? { list: r.list } : { list: [], message: r.message || '服务器没找到可下载的字幕（需 Emby 服务器启用 OpenSubtitles 插件）', unavailable: r.unavailable })
+    } catch (err) {
+      setRemote({ list: [], message: `搜索失败：${err.message}` })
+    } finally { setRemoteBusy(false) }
+  }
+
+  const downloadRemote = async (s) => {
+    setRemoteBusy(true)
+    try {
+      const res = await fetch('/funhub/api/video/subtitles/download', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ server: serverId, item: itemId, providerName: s.providerName, subId: s.id, language: s.language }),
+      })
+      const r = await res.json()
+      if (!res.ok || !r.ok) throw new Error(r.error || `HTTP ${res.status}`)
+      actions.toast(r.message || '字幕已下载挂载')
+      setOpen(false); setRemote(null)
+      onRefresh?.()
+    } catch (err) {
+      actions.toast(`下载失败：${err.message}`)
+    } finally { setRemoteBusy(false) }
+  }
+
+  const pickLocal = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      const text = await file.text()
+      const vtt = /\.vtt$/i.test(file.name) ? text : srtToVtt(text)
+      const url = URL.createObjectURL(new Blob([vtt], { type: 'text/vtt' }))
+      // 直接在 video 上挂本地轨并启用
+      const video = videoRef.current
+      if (!video) return
+      const track = video.addTextTrack('subtitles', `本地 · ${file.name.replace(/\.[^.]+$/, '')}`, 'zh')
+      const cues = parseVttCues(vtt)
+      for (const c of cues) track.addCue(new VTTCue(c.start, c.end, c.text))
+      track.mode = 'showing'
+      setSelected(`local:${(video.textTracks.length || 1) - 1}`)
+      setOpen(false)
+    } catch (err) { actions.toast(`本地字幕加载失败：${err.message}`) }
+  }
+
+  const hasServerTracks = subtitles.length > 0
+  return h('div', { className: 'fh-sub-wrap', ref: menuRef },
+    h('button', {
+      className: `fh-icon-btn${selected !== 'off' ? ' is-on' : ''}`, title: '字幕',
+      onClick: () => setOpen((o) => !o),
+    }, h('span', { style: { fontSize: 13, fontWeight: 700 } }, '字')),
+    open ? h('div', { className: 'fh-sub-menu' },
+      hasServerTracks ? h('div', { className: 'sec' },
+        subtitles.map((s, i) => h('button', {
+          key: s.index, className: `item${selected === i ? ' is-on' : ''}`,
+          onClick: () => { setSelected(i); setOpen(false) },
+        }, `${s.label}${s.lang ? ` · ${s.lang}` : ''}${s.codec ? ` (${s.codec})` : ''}`)),
+        h('button', { className: `item${selected === 'off' ? ' is-on' : ''}`, onClick: () => { setSelected('off'); setOpen(false) } }, '关闭字幕'))
+      : h('div', { className: 'empty' }, isHls ? '转码模式下可开启服务器字幕（烧录进画面）' : '该版本没有内嵌/外挂字幕流'),
+      h('div', { className: 'sep' }),
+      h('button', { className: 'item', disabled: remoteBusy, onClick: searchRemote },
+        remoteBusy ? '搜索中…' : '🔍 自动搜索字幕（服务器）'),
+      remote?.list?.length ? h('div', { className: 'sec' },
+        remote.list.slice(0, 8).map((s, i) => h('button', {
+          key: `${s.id}:${i}`, className: 'item', disabled: remoteBusy,
+          onClick: () => void downloadRemote(s),
+        }, `${s.name}${s.providerName ? ` · ${s.providerName}` : ''}${s.downloads ? ` · ⬇${s.downloads}` : ''}`))) : null,
+      remote?.message ? h('div', { className: 'empty' }, remote.message) : null,
+      h('div', { className: 'sep' }),
+      h('button', { className: 'item', onClick: () => fileRef.current?.click() }, '📂 加载本地字幕（srt/vtt）'),
+      h('input', { ref: fileRef, type: 'file', accept: '.srt,.vtt', style: { display: 'none' }, onChange: pickLocal }))
+    : null)
+}
+
+/** 极简 VTT 解析（本地字幕挂 cue 用；容错跳过无法解析的块）。 */
+function parseVttCues(vtt) {
+  const cues = []
+  const toSec = (t) => {
+    const m = /^(?:(\d+):)?(\d{1,2}):(\d{2})[.,](\d{1,3})$/.exec(String(t).trim())
+    if (!m) return NaN
+    return (Number(m[1]) || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]) + Number(String(m[4]).padEnd(3, '0')) / 1000
+  }
+  const lines = String(vtt).split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const m = /(\d{1,2}:\d{2}:\d{2}[.,]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[.,]\d{1,3})/.exec(lines[i])
+    if (!m) continue
+    const start = toSec(m[1]); const end = toSec(m[2])
+    const text = []
+    for (let j = i + 1; j < lines.length && lines[j].trim(); j++) text.push(lines[j].replace(/<[^>]+>/g, ''))
+    if (!text.length || Number.isNaN(start) || Number.isNaN(end)) continue
+    cues.push({ start, end, text: text.join('\n') })
+    i += text.length
+  }
+  return cues
+}
+
 /* ================= 页内播放器（详情页顶部，16:9，可全屏） ================= */
-export function InlinePlayer({ title, url, fallbackUrl, onClose, onFallback }) {
+export function InlinePlayer({ title, url, fallbackUrl, onClose, onFallback, subtitles = [], serverId, itemId, msId, onRefresh }) {
   const [activeUrl, setActiveUrl] = useState(url)
-  // 换片（切集）时重置到新地址
-  useEffect(() => { setActiveUrl(url) }, [url])
+  const [selected, setSelected] = useState(null) // null=未选（挂轨后自动选）；'off' | index | 'local:n'
+  // 换片（切集）时重置到新地址与选轨
+  useEffect(() => { setActiveUrl(url); setSelected(null) }, [url])
   const isHls = /\/video\/m3u8\?/.test(activeUrl)
   const { videoRef, fatal } = useVideoEngine(activeUrl, isHls)
   const wrapRef = useRef(null)
   const switchFallback = fallbackUrl && activeUrl !== fallbackUrl
     ? () => { setActiveUrl(fallbackUrl); onFallback?.() }
     : null
+
+  /* 首次挂轨自动选中文字幕轨（用户没手动选过时） */
+  useEffect(() => {
+    if (selected !== null || !subtitles.length) return
+    const zh = subtitles.findIndex((s) => isZhLang(s.lang))
+    setSelected(zh >= 0 ? zh : 0)
+  }, [subtitles]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useNativeSubtitles(videoRef, subtitles, selected, null)
+
+  /* HLS 转码 + 选了字幕轨 → 改写 u 参数加 SubtitleStreamIndex（Emby 把字幕烧进转码画面） */
+  const burnedIndex = isHls && typeof selected === 'number' ? subtitles[selected]?.index : null
+  useEffect(() => {
+    if (!isHls) return
+    // searchParams.get 返回的是解码后的原始 Emby 地址；先剥掉旧烧录参数再按需追加
+    const uParam = new URL(activeUrl, location.origin).searchParams.get('u') || ''
+    const clean = uParam.replace(/&SubtitleStreamIndex=\d+/g, '')
+    const rebuilt = burnedIndex != null
+      ? `/funhub/api/video/m3u8?u=${encodeURIComponent(`${clean}&SubtitleStreamIndex=${burnedIndex}`)}`
+      : `/funhub/api/video/m3u8?u=${encodeURIComponent(clean)}`
+    if (rebuilt !== activeUrl) setActiveUrl(rebuilt)
+  }, [burnedIndex, isHls]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const goFullscreen = () => {
     const el = wrapRef.current
@@ -111,11 +285,21 @@ export function InlinePlayer({ title, url, fallbackUrl, onClose, onFallback }) {
     h('div', { className: 'fh-inline-player-bar' },
       h('span', { className: 't' }, title),
       h('span', { className: 'fh-muted', style: { fontSize: 11 } }, isHls ? '转码 HLS' : '直连'),
+      subtitles.length ? h('span', { className: 'fh-muted', style: { fontSize: 11 } }, `· ${subtitles.length} 条字幕`) : null,
       h('div', { className: 'fh-spacer' }),
+      serverId && itemId && msId ? h(SubtitleMenu, {
+        videoRef, subtitles, selected, setSelected, serverId, itemId, msId, isHls, onRefresh,
+      }) : null,
       h('button', { className: 'fh-icon-btn', onClick: goFullscreen, title: '全屏' }, h(Icon, { name: 'full', size: 15 })),
       onClose ? h('button', { className: 'fh-icon-btn', onClick: onClose, title: '停止播放' }, h(Icon, { name: 'close', size: 15 })) : null),
     h('div', { className: 'fh-inline-player-stage' },
-      h('video', { ref: videoRef, controls: true, autoPlay: true, playsInline: true }),
+      h('video', {
+        ref: videoRef, controls: true, autoPlay: true, playsInline: true, crossOrigin: 'anonymous',
+      },
+        !isHls && subtitles.map((s) => h('track', {
+          key: `${s.index}:${s.label}`, kind: 'subtitles', src: s.url, label: s.label,
+          srclang: s.lang || 'und',
+        }))),
       fatal ? h(FatalPanel, { fatal, fallback: switchFallback, activeUrl }) : null))
 }
 

@@ -77,17 +77,29 @@ export async function embyDetail(server, id) {
     headers: embyHeaders(server.apiKey),
   })
   const sources = (res.MediaSources || []).map((ms) => {
-    const videoCodec = String((ms.MediaStreams || []).find((st) => st.Type === 'Video')?.Codec || '').toLowerCase()
+    const streams = ms.MediaStreams || []
+    const videoCodec = String(streams.find((st) => st.Type === 'Video')?.Codec || '').toLowerCase()
     const container = String(ms.Container || '').toLowerCase()
     // 浏览器 <video> 播放面：mp4 + h264/vp9 最稳；mkv/hevc 基本播不了 → 需要 Emby 转码 HLS
     const directPlay = (container === 'mp4' || container === 'm4v' || container === 'webm')
       && !['hevc', 'h265', 'av1'].includes(videoCodec)
+    // 字幕流：Emby 可把 ssa/srt/mov_text 统一转 webvtt 输出（Stream.vtt），前端挂 <track> 播
+    const subtitles = streams
+      .filter((st) => st.Type === 'Subtitle')
+      .map((st) => ({
+        index: Number(st.Index),
+        lang: String(st.Language || st.LanguageTag || ''),
+        label: String(st.DisplayTitle || st.Title || st.Language || `字幕 ${st.Index}`),
+        codec: String(st.Codec || ''),
+        isExternal: st.IsExternal !== false,
+      }))
     return {
       id: String(ms.Id),
       name: String(ms.Name || '默认版本'),
       container,
       videoCodec,
       directPlay,
+      subtitles,
     }
   })
   return {
@@ -112,6 +124,44 @@ export function embyHlsUrl(server, itemId, msId) {
   const base = server.url.replace(/\/$/, '')
   const psid = `${Date.now().toString(16)}-${Math.random().toString(36).slice(2, 10)}`
   return `${base}/emby/Videos/${itemId}/master.m3u8?MediaSourceId=${encodeURIComponent(msId)}&api_key=${encodeURIComponent(server.apiKey)}&VideoCodec=h264&AudioCodec=aac&AudioStreamIndex=1&VideoBitrate=6000000&TranscodingMaxAudioChannels=2&PlaySessionId=${psid}&TranscodeReasons=VideoCodecNotSupported`
+}
+
+/** Emby 字幕流地址：ssa/srt/mov_text 等统一转 webvtt（api_key 不出宿主，由路由代理）。 */
+export function embySubtitleUrl(server, itemId, msId, streamIndex) {
+  const base = server.url.replace(/\/$/, '')
+  return `${base}/emby/Videos/${itemId}/${msId}/Subtitles/${streamIndex}/Stream.vtt?api_key=${encodeURIComponent(server.apiKey)}`
+}
+
+/** 服务端远程字幕搜索（依赖 Emby 服务器 OpenSubtitles 插件；无插件/无结果返回空列表）。 */
+export async function embyRemoteSubtitles(server, itemId, language = 'chi') {
+  const base = server.url.replace(/\/$/, '')
+  const res = await safeFetchJson(`${base}/emby/Items/${itemId}/RemoteSearch/Subtitles/${encodeURIComponent(language)}`, {
+    timeout: 20_000, headers: embyHeaders(server.apiKey),
+  })
+  const list = Array.isArray(res) ? res : []
+  return list.map((s) => ({
+    id: String(s.Id ?? s.SubtitleId ?? ''),
+    providerName: String(s.ProviderName || ''),
+    name: String(s.Name || s.Title || '未命名字幕'),
+    format: String(s.Format || s.ThreeLetterISOLanguageName || ''),
+    language: String(s.Languages?.[0] || s.Language || language),
+    author: String(s.Author || ''),
+    downloads: Number(s.Downloads || 0),
+  })).filter((s) => s.id)
+}
+
+/** 服务端下载并挂载远程字幕（POST 后 Emby 把字幕挂到该条目，重新拉详情即可见新字幕流）。 */
+export async function embyDownloadSubtitle(server, itemId, sub) {
+  const base = server.url.replace(/\/$/, '')
+  await safeFetchJson(`${base}/emby/Items/${itemId}/RemoteSearch/Subtitle`, {
+    timeout: 60_000, requestMethod: 'POST',
+    headers: { ...embyHeaders(server.apiKey), 'content-type': 'application/json' },
+    requestBody: JSON.stringify({
+      ProviderName: sub.providerName, Id: sub.id,
+      Language: sub.language || 'chi',
+    }),
+  })
+  return { ok: true }
 }
 
 /* ================= m3u8 代理重写 ================= */

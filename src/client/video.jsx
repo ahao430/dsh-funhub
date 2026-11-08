@@ -112,6 +112,7 @@ function EmbyTab({ servers }) {
         url: direct ? ms.url : ms.hlsUrl,
         fallbackUrl: direct ? ms.hlsUrl : null,
         epId: ep.id,
+        serverId, itemId: ep.id, msId: ms.id, subtitles: ms.subtitles || [],
       })
       setDetail((prev) => ({ ...prev, epLoading: null }))
     } catch (err) {
@@ -128,8 +129,27 @@ function EmbyTab({ servers }) {
       url: direct ? ms.url : ms.hlsUrl,
       fallbackUrl: direct ? ms.hlsUrl : null,
       epId: d.id,
+      serverId, itemId: d.id, msId: ms.id, subtitles: ms.subtitles || [],
     })
   }
+
+  // 字幕下载挂载后刷新播放流（重新拉详情，字幕轨与转码地址都换新）
+  const refreshPlaying = useCallback(async () => {
+    if (!playing?.itemId) return
+    try {
+      const r = await api.get(`/video/emby/detail?server=${encodeURIComponent(serverId)}&id=${encodeURIComponent(playing.itemId)}`)
+      const d = r.detail
+      const ms = (d.sources || [])[0]
+      if (!ms) return
+      const direct = ms.directPlay !== false
+      setPlaying((prev) => prev ? ({
+        ...prev,
+        url: direct ? ms.url : ms.hlsUrl,
+        fallbackUrl: direct ? ms.hlsUrl : null,
+        msId: ms.id, subtitles: ms.subtitles || [],
+      }) : prev)
+    } catch { /* 刷新失败保持现状 */ }
+  }, [playing?.itemId, serverId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const closeDetail = () => { setDetail(null); setPlaying(null) }
 
@@ -146,6 +166,8 @@ function EmbyTab({ servers }) {
       /* 播放器：详情页顶部，点播放/点单集即挂载 */
       playing ? h(InlinePlayer, {
         title: playing.title, url: playing.url, fallbackUrl: playing.fallbackUrl,
+        serverId: playing.serverId, itemId: playing.itemId, msId: playing.msId, subtitles: playing.subtitles,
+        onRefresh: () => void refreshPlaying(),
         onClose: () => setPlaying(null),
       }) : null,
 

@@ -507,6 +507,18 @@ html.fh-light .fh-arcade { background: linear-gradient(120deg, #ffe3f0 0%, #e3f4
 .fh-inline-player { display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; border: 1px solid var(--fh-line); background: #000; }
 .fh-inline-player:fullscreen { border-radius: 0; }
 .fh-inline-player-bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--fh-panel); border-bottom: 1px solid var(--fh-line); font-size: 12.5px; }
+/* 字幕菜单 */
+.fh-sub-wrap { position: relative; display: inline-flex; }
+.fh-sub-menu { position: absolute; top: 30px; right: 0; z-index: 30; min-width: 240px; max-width: 340px; max-height: 340px; overflow-y: auto;
+  background: var(--fh-panel); border: 1px solid var(--fh-line); border-radius: 10px; box-shadow: 0 14px 40px rgba(0,0,0,.4); padding: 6px; }
+.fh-sub-menu .item { display: block; width: 100%; text-align: left; border: none; background: none; color: var(--fh-ink); font-size: 12.5px; padding: 7px 10px; border-radius: 7px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fh-sub-menu .item:hover { background: var(--fh-panel-2); }
+.fh-sub-menu .item.is-on { background: var(--fh-accent-soft); color: var(--fh-accent); font-weight: 600; }
+.fh-sub-menu .item:disabled { opacity: .55; cursor: default; }
+.fh-sub-menu .sep { height: 1px; background: var(--fh-line); margin: 5px 4px; }
+.fh-sub-menu .empty { padding: 6px 10px; font-size: 11.5px; color: var(--fh-ink3); line-height: 1.5; }
+.fh-sub-menu .sec { display: flex; flex-direction: column; }
+.fh-icon-btn.is-on { color: var(--fh-accent); }
 .fh-inline-player-bar .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fh-inline-player-stage { position: relative; aspect-ratio: 16 / 9; display: flex; align-items: center; justify-content: center; background: #000; }
 .fh-inline-player-stage video { width: 100%; height: 100%; object-fit: contain; }

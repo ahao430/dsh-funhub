@@ -19,8 +19,10 @@ const EMBY_EPISODES = { TotalRecordCount: 2, Items: [
   { Id: 'ep1', Name: '第一集', Type: 'Episode', ParentIndexNumber: 1, IndexNumber: 1, RunTimeTicks: 6_000_000_000 * 4 },
   { Id: 'ep2', Name: '第二集', Type: 'Episode', ParentIndexNumber: 1, IndexNumber: 2, RunTimeTicks: 6_000_000_000 * 4 },
 ] }
-const EMBY_EPISODE_DETAIL = { Id: 'ep1', SeriesName: '测试剧', Name: '第一集', Type: 'Episode', Overview: '剧情', ProductionYear: 2024, MediaSources: [{ Id: 'mse1', Name: '1080p', Container: 'mkv', MediaStreams: [{ Type: 'Video', Codec: 'hevc' }, { Type: 'Audio', Codec: 'aac' }] }] }
+const EMBY_EPISODE_DETAIL = { Id: 'ep1', SeriesName: '测试剧', Name: '第一集', Type: 'Episode', Overview: '剧情', ProductionYear: 2024, MediaSources: [{ Id: 'mse1', Name: '1080p', Container: 'mkv', MediaStreams: [{ Type: 'Video', Codec: 'hevc' }, { Type: 'Audio', Codec: 'aac' }, { Type: 'Subtitle', Index: 2, Codec: 'srt', Language: 'chn', DisplayTitle: 'chn (SRT)', IsExternal: true }, { Type: 'Subtitle', Index: 3, Codec: 'ssa', Language: 'eng', DisplayTitle: 'eng (SSA)', IsExternal: true }] }] }
 const EMBY_ITEM1_DETAIL = { Id: 'it1', Name: '海洋', Type: 'Movie', Overview: '纪录片', ProductionYear: 2003, MediaSources: [{ Id: 'ms1', Name: '4K', Container: 'mp4', MediaSources: undefined, MediaStreams: [{ Type: 'Video', Codec: 'h264' }, { Type: 'Audio', Codec: 'aac' }] }] }
+const VTT_TEXT = 'WEBVTT\n\n00:01.000 --> 00:03.000\n测试字幕行\n'
+const REMOTE_SUBS = [{ Id: 'sub-1', ProviderName: 'OpenSubtitles', Name: '测试剧 S01E01 简体&英文', Format: 'srt', Languages: ['chi'], Downloads: 128 }]
 const HLS_MASTER = '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=4953600\nmain.m3u8?PlaySessionId=s1\n'
 const HLS_SUB = '#EXTM3U\n#EXTINF:6,\nhls1/main/0.ts?PlaySessionId=s1\n'
 
@@ -39,6 +41,10 @@ globalThis.fetch = async (input, init = {}) => {
   if (u.includes('/master.m3u8')) return new Response(HLS_MASTER, { status: 200, headers: { 'content-type': 'application/vnd.apple.mpegurl' } })
   if (u.includes('/main.m3u8')) return new Response(HLS_SUB, { status: 200, headers: { 'content-type': 'application/vnd.apple.mpegurl' } })
   if (u.includes('/hls1/main/0.ts')) return new Response(Buffer.from([0x47, 0x01, 0x02, 0x03]), { status: 200, headers: { 'content-type': 'video/mp2t' } })
+  if (u.includes('/RemoteSearch/Subtitles/chi')) return jsonRes(REMOTE_SUBS) // 必须在 /Subtitles/ 兜底之前
+  if (u.includes('/RemoteSearch/Subtitle')) return jsonRes({ ok: true })
+  if (u.includes('/Subtitles/2/Stream.vtt')) return new Response(VTT_TEXT, { status: 200, headers: { 'content-type': 'text/vtt' } })
+  if (u.includes('/Subtitles/')) return new Response('WEBVTT\n\n00:00.000 --> 00:01.000\neng\n', { status: 200, headers: { 'content-type': 'text/vtt' } })
   // 通用字节流（海报/视频段）
   return new Response(Buffer.from('DATA'), { status: 200, headers: { 'content-type': 'application/octet-stream' } })
 }
@@ -113,6 +119,23 @@ try {
   const epd = epDet.json().detail
   assert.equal(epd.sources[0].directPlay, false, 'mkv/hevc 不可直连')
   assert.ok(epd.sources[0].hlsUrl.includes(encodeURIComponent('PlaySessionId=')), 'HLS 带会话 ID（缺它分片 400）')
+
+  /* 字幕：detail 提取字幕流 → vtt 代理 → 远程搜索 → 下载挂载 */
+  const subs = epd.sources[0].subtitles
+  assert.equal(subs.length, 2, '字幕流被提取')
+  assert.equal(subs[0].index, 2)
+  assert.equal(subs[0].lang, 'chn')
+  assert.ok(subs[0].url.startsWith('/funhub/api/video/subtitle?'), '字幕地址经代理（api_key 不出宿主）')
+  const vttRes = await call(`video/subtitle?server=${st.emby[0].id}&item=ep1&source=mse1&index=2`)
+  assert.equal(vttRes.statusCode, 200)
+  assert.ok(vttRes.headers['content-type'].includes('text/vtt'), 'vtt content-type')
+  assert.ok(vttRes.text().startsWith('WEBVTT'), '字幕内容是 WEBVTT')
+  assert.ok(!vttRes.text().includes('tok-1'), 'api_key 不泄漏')
+  const search = await call(`video/subtitles/search?server=${st.emby[0].id}&item=ep1&lang=chi`)
+  assert.equal(search.json().list.length, 1, '远程字幕搜索返回 1 条')
+  assert.equal(search.json().list[0].providerName, 'OpenSubtitles')
+  const dl = await call('video/subtitles/download', 'POST', { server: st.emby[0].id, item: 'ep1', providerName: 'OpenSubtitles', subId: 'sub-1', language: 'chi' })
+  assert.equal(dl.json().ok, true, '远程字幕下载挂载')
 
   /* HLS 代理链：master 重写 → 子列表重写 → 分片 stream 直通（MPEG-TS 魔数） */
   const hlsMasterUrl = epd.sources[0].hlsUrl.replace('/funhub/api/video/m3u8?u=', '')

@@ -6,7 +6,7 @@ import { OPS } from './ops.js'
 import { newId } from './store.js'
 import { safeFetchBuffer, safeFetchJson, safeFetchLx, safeFetchText, assertSafeUrl, assertPublicHost, FetchError, setOutboundProxy, makeProxyDispatcher, fetchViaProxy } from './fetcher.js'
 import { parseFeed, repairEscapedHtml } from './rss.js'
-import { embyValidate, embyAuthByName, embyViews, embyItems, embyEpisodes, embyDetail, embyStreamUrl, embyHlsUrl, embyPosterUrl, rewriteM3u8 } from './video.js'
+import { embyValidate, embyAuthByName, embyViews, embyItems, embyEpisodes, embyDetail, embyStreamUrl, embyHlsUrl, embyPosterUrl, embySubtitleUrl, embyRemoteSubtitles, embyDownloadSubtitle, rewriteM3u8 } from './video.js'
 import { sanitizeHtml } from './sanitize.js'
 import { novelSearch, novelPopular, novelDetail, novelContent, imageFeed, musicSearch, musicTracks } from './proxy.js'
 import { legadoSearch, legadoExplore, exploreCategories, legadoDetail, legadoToc, legadoContent, sourceCompatibility } from './legado.js'
@@ -870,8 +870,47 @@ export async function route(ctx, store, req, res) {
         ...ms,
         url: `/funhub/api/video/stream?u=${encodeURIComponent(embyStreamUrl(server, id, ms.id))}`,
         hlsUrl: `/funhub/api/video/m3u8?u=${encodeURIComponent(embyHlsUrl(server, id, ms.id))}`,
+        // 字幕流：ssa/srt/mov_text 统一转 webvtt 经代理输出；前端 <track> 播（转码时改走烧录）
+        subtitles: (ms.subtitles || []).map((s) => ({
+          ...s,
+          url: `/funhub/api/video/subtitle?server=${encodeURIComponent(server.id)}&item=${encodeURIComponent(id)}&source=${encodeURIComponent(ms.id)}&index=${s.index}`,
+        })),
       }))
       return json(res, 200, { ok: true, detail })
+    }
+    if (path === 'video/subtitle' && method === 'GET') {
+      // Emby 字幕流代理（Stream.vtt）：api_key 不出宿主
+      const server = await embyServer(url.searchParams.get('server') || '')
+      const itemId = url.searchParams.get('item') || ''
+      const msId = url.searchParams.get('source') || ''
+      const index = Number(url.searchParams.get('index')) || 0
+      if (!itemId || !msId || !index) return json(res, 400, { error: '缺少字幕流参数' })
+      const text = await safeFetchText(embySubtitleUrl(server, itemId, msId, index), { timeout: 20_000, maxSize: 8_000_000, headers: { accept: '*/*' } })
+      res.statusCode = 200
+      res.setHeader('content-type', 'text/vtt; charset=utf-8')
+      res.setHeader('cache-control', 'private, max-age=3600')
+      res.setHeader('access-control-allow-origin', '*')
+      return res.end(text)
+    }
+    if (path === 'video/subtitles/search' && method === 'GET') {
+      // 服务端远程字幕搜索（Emby OpenSubtitles 插件；无插件/无结果 → 空列表）
+      const server = await embyServer(url.searchParams.get('server') || '')
+      const itemId = url.searchParams.get('item') || ''
+      const lang = (url.searchParams.get('lang') || 'chi').trim()
+      if (!itemId) return json(res, 400, { error: '缺少条目 id' })
+      let list = []
+      try { list = await embyRemoteSubtitles(server, itemId, lang) } catch (err) {
+        return json(res, 200, { ok: true, list, unavailable: true, message: `服务器远程字幕不可用：${err.message}` })
+      }
+      return json(res, 200, { ok: true, list })
+    }
+    if (path === 'video/subtitles/download' && method === 'POST') {
+      const body = await readJson(req)
+      const server = await embyServer(String(body.server || ''))
+      const itemId = String(body.item || '')
+      if (!itemId || !body.subId) return json(res, 400, { error: '缺少条目或字幕 id' })
+      await embyDownloadSubtitle(server, itemId, { providerName: String(body.providerName || ''), id: String(body.subId), language: String(body.language || 'chi') })
+      return json(res, 200, { ok: true, message: '字幕已下载挂载，正在刷新播放器' })
     }
     if (path === 'video/m3u8' && method === 'GET') {
       // Emby HLS 转码代理：master/子播放列表重写（分片与密钥走 stream 代理），api_key 不出宿主
