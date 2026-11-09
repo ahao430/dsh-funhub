@@ -18,7 +18,7 @@ export function BookTile({ book, onClick }) {
 
 export function NovelPage() {
   const boot = getState().boot
-  const [tab, setTab] = useState('discover')
+  const [tab, setTab] = useState('shelf')
   const bookSources = (boot?.bookSources || []).filter((s) => s.enabled && s.compatible !== false)
   const lastNovel = boot?.settings?.lastSource?.novel
   const [sourceId, setSourceId] = useState(lastNovel && (lastNovel === 'gutenberg' || bookSources.some((s) => s.url === lastNovel && s.enabled !== false))
@@ -83,10 +83,10 @@ export function NovelPage() {
       h('div', { className: 'fh-page-title' }, '小说阅读'),
       h('div', { className: 'fh-spacer' }),
       h('div', { style: { display: 'flex', gap: 8 } },
-        h('button', { className: `fh-chip-btn${tab === 'discover' ? ' is-on' : ''}`, onClick: () => setTab('discover') }, '发现'),
-        h('button', { className: `fh-chip-btn${tab === 'search' ? ' is-on' : ''}`, onClick: () => setTab('search') }, '搜索'),
         h('button', { className: `fh-chip-btn${tab === 'shelf' ? ' is-on' : ''}`, onClick: () => setTab('shelf') }, `书架 ${boot?.shelf?.length || 0}`),
-        h('button', { className: `fh-chip-btn${tab === 'history' ? ' is-on' : ''}`, onClick: () => setTab('history') }, `历史 ${boot?.novelHistory?.length || 0}`))),
+        h('button', { className: `fh-chip-btn${tab === 'history' ? ' is-on' : ''}`, onClick: () => setTab('history') }, `历史 ${boot?.novelHistory?.length || 0}`),
+        h('button', { className: `fh-chip-btn${tab === 'discover' ? ' is-on' : ''}`, onClick: () => setTab('discover') }, '发现'),
+        h('button', { className: `fh-chip-btn${tab === 'search' ? ' is-on' : ''}`, onClick: () => setTab('search') }, '搜索'))),
 
     tab === 'discover' ? h(DiscoverTab, { boot, onOpenDetail: setDetail, onGotoTab: setTab }) : null,
     tab === 'search' ? h('div', null,
@@ -239,34 +239,6 @@ function DiscoverTab({ boot, onOpenDetail, onGotoTab }) {
   })
 
   return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 18 } },
-    /* 最近阅读（自动历史，含未加入书架的书） */
-    history.length ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
-      h('div', { style: { display: 'flex', alignItems: 'center' } },
-        h('div', { style: { fontWeight: 600, fontSize: 14 } }, '最近阅读'),
-        h('div', { className: 'fh-spacer' }),
-        h('button', { className: 'fh-chip-btn', onClick: async () => {
-          await api.op('data_clear', { scope: 'novelHistory' })
-          await actions.reload()
-          actions.toast('已清空阅读历史')
-        } }, '清空')),
-      h('div', { className: 'fh-hstrip',
-        onMouseWheel: (e) => {
-          // 触控板自然横滑即可；鼠标竖滚轮在条内转为横向滚动
-          const el = e.currentTarget
-          if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { el.scrollLeft += e.deltaY; e.preventDefault() }
-        },
-      },
-        history.slice(0, 12).map((b) => h('button', { key: b.bookId, className: 'fh-hstrip-item', onClick: () => actions.openNovel({
-          mode: b.sourceId === 'gutenberg' ? 'gutenberg' : 'legado',
-          sourceId: b.sourceId, bookId: b.bookId, title: b.title, author: b.author || '', cover: b.cover || '',
-          chapterIndex: b.chapterIndex || 0,
-        }) },
-          b.cover
-            ? h('img', { className: 'fh-hstrip-cover', src: b.cover, alt: '', onError: (e) => { e.currentTarget.style.visibility = 'hidden' } })
-            : h('span', { className: 'fh-hstrip-cover ph' }, '📖'),
-          h('span', { className: 'fh-hstrip-title' }, b.title),
-          h('span', { className: 'fh-hstrip-sub' }, `${b.chapterTitle || `第 ${(b.chapterIndex || 0) + 1} 章`} · ${fmtAgo(b.updatedAt)}`))))) : null,
-
     /* 书源发现：RSS 式左列表选源（便于直接删除没内容的源），右侧分类 + 书墙 */
     exploreSources.length ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
       h('div', { style: { fontWeight: 600, fontSize: 14 } }, '发现'),

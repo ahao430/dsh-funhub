@@ -5,7 +5,7 @@ import { actions, getState } from './store.js'
 import { Icon, Btn, Input, Select, Empty, Loading, ErrorBox, Modal } from './ui.jsx'
 
 export function ComicPage() {
-  const [tab, setTab] = useState('explore')
+  const [tab, setTab] = useState('shelf')
   const boot = getState().boot
   const sources = (boot?.comicSources || []).filter((s) => s.enabled && !s.error)
   const lastComic = boot?.settings?.lastSource?.comic
@@ -52,14 +52,12 @@ export function ComicPage() {
       h('div', { className: 'fh-page-title' }, '漫画'),
       h('div', { className: 'fh-spacer' }),
       h('div', { style: { display: 'flex', gap: 8 } },
-        h('button', { className: `fh-chip-btn${tab === 'explore' ? ' is-on' : ''}`, onClick: () => setTab('explore') }, '发现'),
-        h('button', { className: `fh-chip-btn${tab === 'search' ? ' is-on' : ''}`, onClick: () => setTab('search') }, '搜索'),
         h('button', { className: `fh-chip-btn${tab === 'shelf' ? ' is-on' : ''}`, onClick: () => setTab('shelf') }, `书架 ${boot?.comics?.length || 0}`),
-        h('button', { className: `fh-chip-btn${tab === 'history' ? ' is-on' : ''}`, onClick: () => setTab('history') }, `历史 ${boot?.comicHistory?.length || 0}`))),
+        h('button', { className: `fh-chip-btn${tab === 'history' ? ' is-on' : ''}`, onClick: () => setTab('history') }, `历史 ${boot?.comicHistory?.length || 0}`),
+        h('button', { className: `fh-chip-btn${tab === 'explore' ? ' is-on' : ''}`, onClick: () => setTab('explore') }, '发现'),
+        h('button', { className: `fh-chip-btn${tab === 'search' ? ' is-on' : ''}`, onClick: () => setTab('search') }, '搜索'))),
 
-    tab === 'explore' ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 14 } },
-      h(ComicHistorySection, { onOpenDetail: null, onOpenReader: (entry) => actions.openComic({ sourceId: entry.sourceKey, comicId: entry.comicId, title: entry.title, cover: entry.cover || '', chapterIndex: null }) }),
-      h(ComicExplore, { sources, onOpenDetail: setDetail })) : null,
+    tab === 'explore' ? h(ComicExplore, { sources, onOpenDetail: setDetail }) : null,
 
     tab === 'search' ? h('div', null,
       sources.length ? h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
@@ -118,32 +116,6 @@ function ComicHistoryTab({ boot }) {
           c.cover ? h('img', { src: c.cover, loading: 'lazy', alt: '', style: { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }, onError: (e) => { e.currentTarget.style.display = 'none' } }) : null),
         h('div', { className: 'fh-tile-title' }, c.title),
         h('div', { className: 'fh-tile-sub' }, c.chapterTitle || '继续阅读')))))
-}
-
-/* ================= 最近阅读（自动历史） ================= */
-function ComicHistorySection() {
-  const boot = getState().boot
-  const history = boot?.comicHistory || []
-  if (!history.length) return null
-  return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
-    h('div', { style: { display: 'flex', alignItems: 'center' } },
-      h('div', { style: { fontWeight: 600, fontSize: 14 } }, '最近阅读'),
-      h('div', { className: 'fh-spacer' }),
-      h('button', { className: 'fh-chip-btn', onClick: async () => {
-        await api.op('data_clear', { scope: 'comicHistory' })
-        await actions.reload()
-        actions.toast('已清空阅读历史')
-      } }, '清空')),
-    h('div', { className: 'fh-tiles' },
-      history.slice(0, 8).map((c) => h('div', { key: `${c.sourceKey}:${c.comicId}`, className: 'fh-tile', onClick: () => actions.openComic({
-        sourceId: c.sourceKey, comicId: c.comicId, title: c.title, cover: c.cover || '', chapterIndex: null,
-      }) },
-        h('div', { className: 'fh-tile-cover', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, position: 'relative' } },
-          h('span', { style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' } }, '📚'),
-          c.cover ? h('img', { src: c.cover, loading: 'lazy', alt: '', style: { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }, onError: (e) => { e.currentTarget.style.display = 'none' } }) : null),
-        h('div', { className: 'fh-tile-title' }, c.title),
-        h('div', { className: 'fh-tile-sub' }, c.chapterTitle || '继续阅读')))),
-  )
 }
 
 /* ================= 发现（默认 tab）：venera 源 explore 页 ================= */
