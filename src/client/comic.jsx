@@ -382,6 +382,41 @@ export function ComicReader() {
   return h(ComicReaderInner, { key: `${session.sourceId}:${session.comicId}`, session })
 }
 
+/** 阅读器顶栏的书架开关：在架（或已收藏）→点移出（带确认）；不在→一点加入书架。 */
+function ComicShelfToggle({ session }) {
+  const boot = getState().boot
+  const onShelf = (boot?.comics || []).some((c) => c.comicId === session.comicId && c.sourceKey === session.sourceId)
+  const favored = (boot?.comicFavs || []).some((c) => c.comicId === session.comicId && c.sourceKey === session.sourceId)
+  const [confirmOut, setConfirmOut] = useState(false)
+  const inShelf = onShelf || favored
+  const toggle = async () => {
+    if (inShelf) { setConfirmOut(true); return }
+    await api.op('comic_shelf_add', { comic: {
+      sourceKey: session.sourceId, comicId: session.comicId,
+      title: session.title, subtitle: '', cover: session.cover || '',
+    } })
+    await actions.reload()
+    actions.toast(`已将《${session.title}》加入书架`)
+  }
+  return h('span', null,
+    h('button', {
+      className: `fh-icon-btn${inShelf ? ' is-on' : ''}`,
+      title: inShelf ? '移出书架' : '加入书架',
+      onClick: toggle,
+    }, h(Icon, { name: inShelf ? 'heart' : 'plus', size: 16 })),
+    confirmOut ? h(ConfirmModal, {
+      title: '移出书架', message: `确定把《${session.title}》移出书架吗？`,
+      hint: favored && !onShelf ? '该漫画以收藏形式在架，将取消收藏。' : '阅读进度一并清除；阅读历史保留。', label: '移除',
+      onClose: () => setConfirmOut(false),
+      onConfirm: async () => {
+        if (favored && !onShelf) await api.op('comic_fav_toggle', { comic: { sourceKey: session.sourceId, comicId: session.comicId, title: session.title, cover: session.cover || '' } })
+        else await api.op('comic_shelf_remove', { sourceKey: session.sourceId, comicId: session.comicId })
+        await actions.reload()
+        actions.toast(`已移出《${session.title}》`)
+      },
+    }) : null)
+}
+
 function ComicReaderInner({ session }) {
   const [chapters, setChapters] = useState(session.chapters || null)
   const [chapterIndex, setChapterIndex] = useState(session.chapterIndex ?? null)
@@ -488,6 +523,7 @@ function ComicReaderInner({ session }) {
       h('button', { className: `fh-chip-btn${mode === 'scroll' ? ' is-on' : ''}`, onClick: () => setMode('scroll') }, '滚动'),
       h('button', { className: `fh-chip-btn${mode === 'single' ? ' is-on' : ''}`, onClick: () => setMode('single') }, '单页'),
       h('button', { className: 'fh-icon-btn', title: '目录', onClick: () => setShowChapters(!showChapters) }, h(Icon, { name: 'list', size: 16 })),
+      h(ComicShelfToggle, { session }),
     ),
     loading ? h('div', { className: 'fh-loading', style: { justifyContent: 'center', flex: 1 } }, h(Loading, { text: '加载章节图片…' })) : null,
     error ? h('div', { style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 } }, h(ErrorBox, { error, onRetry: () => goChapter(chapterIndex) })) : null,

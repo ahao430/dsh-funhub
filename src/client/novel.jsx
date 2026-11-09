@@ -450,6 +450,39 @@ export function NovelReader() {
   return h(ReaderInner, { key: `${session.sourceId}:${session.bookId}`, session })
 }
 
+/** 阅读器顶栏的书架开关：已在架→点移出（带确认）；不在架→一点加入。 */
+function BookShelfToggle({ session }) {
+  const boot = getState().boot
+  const shelfBook = (boot?.shelf || []).find((b) => b.bookId === session.bookId && b.sourceId === session.sourceId)
+  const [confirmOut, setConfirmOut] = useState(false)
+  const inShelf = Boolean(shelfBook)
+  const toggle = async () => {
+    if (inShelf) { setConfirmOut(true); return }
+    await api.op('shelf_add', { book: {
+      bookId: session.bookId, sourceId: session.sourceId,
+      title: session.title, author: session.author || '', cover: session.cover || '',
+    } })
+    await actions.reload()
+    actions.toast(`已将《${session.title}》加入书架`)
+  }
+  return h('span', null,
+    h('button', {
+      className: `fh-icon-btn${inShelf ? ' is-on' : ''}`,
+      title: inShelf ? '移出书架' : '加入书架',
+      onClick: toggle,
+    }, h(Icon, { name: inShelf ? 'heart' : 'plus', size: 16 })),
+    confirmOut ? h(ConfirmModal, {
+      title: '移出书架', message: `确定把《${session.title}》移出书架吗？`,
+      hint: '阅读进度会一并清除；阅读历史保留。', label: '移除',
+      onClose: () => setConfirmOut(false),
+      onConfirm: async () => {
+        await api.op('shelf_remove', { bookId: session.bookId })
+        await actions.reload()
+        actions.toast(`已移出《${session.title}》`)
+      },
+    }) : null)
+}
+
 function ReaderInner({ session }) {
   const boot = getState().boot
   const readerCfg = boot?.settings?.reader || {}
@@ -791,6 +824,7 @@ function ReaderInner({ session }) {
           ? `${pageState.index + 1}/${pageState.total} 页`
           : `${(chapterIndex ?? 0) + 1}/${chapters?.length || '?'} · 本章 ${Math.round(ratioUi * 100)}%`),
       h('button', { className: 'fh-icon-btn', title: '目录', onClick: () => { setShowChapters(!showChapters); setSheetOpen(false) } }, h(Icon, { name: 'list', size: 16 })),
+      h(BookShelfToggle, { session }),
     ),
 
     /* 正文 + 点按分区 */
