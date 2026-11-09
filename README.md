@@ -2,7 +2,7 @@
 
 DeepSeek Harness（DSH）插件：把小说 / 漫画 / 图片 / 音乐 / 影视 / 小游戏 / RSS 整合进一个本地优先的娱乐工作台。
 
-> 🏠 在线介绍页：**GitHub Pages**（`docs/index.html`，仓库 Settings → Pages → `main / docs` 开启）
+> 🏠 在线介绍页：**https://ahao430.github.io/dsh-funhub/** （源码在 `docs/index.html`，GitHub Pages 从 `main / docs` 发布）
 
 ## 功能总览
 
