@@ -125,14 +125,14 @@ function NovelCardBody({ boot }) {
   const [tab, pick] = useHomeCardTab('funhub.home.novelTab')
   const effTab = (tab === 'shelf' && !shelf.length && history.length) ? 'history'
     : (tab === 'history' && !history.length && shelf.length) ? 'shelf' : tab
-  const list = effTab === 'shelf' ? shelf.slice(0, 4) : history.slice(0, 4)
+  const list = effTab === 'shelf' ? shelf.slice(0, 8) : history.slice(0, 8)
   if (!shelf.length && !history.length) {
     return h(Empty, { icon: 'book', title: '书架还是空的',
       hint: '先到 设置 → 阅读书源 导入书源，或在小说频道搜索公版书' })
   }
-  return h('div', { style: { width: '100%' } },
+  return h('div', { style: { width: '100%', display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 } },
     h(CardTabChips, { tab: effTab, onPick: pick, shelfN: shelf.length, histN: history.length }),
-    h('div', { className: 'fh-card-row' },
+    h('div', { className: 'fh-card-row is-scroll' },
       list.map((b) => h('button', { key: b.bookId, className: 'fh-mini-item', onClick: () => openNovelFromShelf(b), title: b.title },
         b.cover ? h('img', { className: 'fh-mini-cover', src: coverSrc(b.cover), loading: 'lazy', alt: '', onError: (e) => { e.currentTarget.style.visibility = 'hidden' } }) : h('span', { className: 'fh-mini-cover' }, '📖'),
         h('span', { className: 't' }, b.title),
@@ -160,14 +160,14 @@ function ComicCardBody({ boot }) {
   const [tab, pick] = useHomeCardTab('funhub.home.comicTab')
   const effTab = (tab === 'shelf' && !shelf.length && history.length) ? 'history'
     : (tab === 'history' && !history.length && shelf.length) ? 'shelf' : tab
-  const list = (effTab === 'shelf' ? shelf : history).slice(0, 3)
+  const list = (effTab === 'shelf' ? shelf : history).slice(0, 8)
   if (!shelf.length && !history.length) {
     return h(Empty, { icon: 'comic', title: '还没有追的漫画',
       hint: '到 设置 → 漫画源 导入 venera 漫画源后搜索' })
   }
-  return h('div', { style: { width: '100%' } },
+  return h('div', { style: { width: '100%', display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 } },
     h(CardTabChips, { tab: effTab, onPick: pick, shelfN: shelf.length, histN: history.length }),
-    h('div', { className: 'fh-card-row' },
+    h('div', { className: 'fh-card-row is-scroll' },
       list.map((c) => h('button', { key: `${c.sourceKey || c.sourceId}:${c.comicId}`, className: 'fh-mini-item', onClick: () => actions.openComic({ sourceId: c.sourceKey || c.sourceId, comicId: c.comicId, title: c.title, cover: c.cover || '', chapterIndex: null }) },
         c.cover ? h('img', { className: 'fh-mini-cover', src: c.cover, loading: 'lazy', alt: '', onError: (e) => { e.currentTarget.style.visibility = 'hidden' } }) : h('span', { className: 'fh-mini-cover' }, '📚'),
         h('span', { className: 't' }, c.title),
@@ -240,8 +240,8 @@ function MusicCardBody({ boot }) {
   if (!history.length) {
     return h(Empty, { icon: 'music', title: '还没有播放记录', hint: '搜索歌曲并播放，播放器会常驻底部' })
   }
-  return h('div', { className: 'fh-card-row', style: { width: '100%' } },
-    history.slice(0, 4).map((t) => h('button', { key: t.trackId, className: 'fh-mini-item', onClick: () => player.setQueue([t.track], 0) },
+  return h('div', { className: 'fh-card-row is-scroll', style: { width: '100%' } },
+    history.slice(0, 8).map((t) => h('button', { key: t.trackId, className: 'fh-mini-item', onClick: () => player.setQueue([t.track], 0) },
       h('span', { className: 'fh-mini-art' }, '🎵'),
       h('span', { className: 't' }, t.track?.title || t.trackId),
       h('span', { className: 's' }, fmtAgo(t.at)))),
@@ -255,19 +255,20 @@ function GamesCardBody({ boot }) {
   const entries = Object.entries(records)
   const list = (favs.length ? favs.map((id) => [id, records[id]]) : entries).filter(Boolean).slice(0, 6)
   const show = list.length ? list : Object.keys(GAME_META).slice(0, 4).map((id) => [id, records[id]])
-  return h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, width: '100%' } },
+  return h('div', { className: 'fh-card-scroll', style: { width: '100%' } },
+    h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, width: '100%' } },
     show.map(([id, rec]) => h('button', { key: id, className: 'fh-mini-item', style: { flexDirection: 'column', gap: 4, padding: '10px 4px', alignItems: 'center' },
       onClick: () => { actions.setView('games'); actions.openGame(id) } },
       h('span', { className: 'fh-mini-art', style: { width: 44, height: 44, fontSize: 22 } }, GAME_META[id]?.emoji || '🎮'),
       h('span', { style: { fontSize: 12 } }, GAME_META[id]?.name || id),
       h('span', { className: 'fh-muted', style: { fontSize: 10.5 } }, rec?.bestScore ? `最高 ${rec.bestScore}` : '未玩过')),
-    ),
+    )),
   )
 }
 
 /* ---- RSS 卡片 ---- */
 function RssCardBody({ boot }) {
-  const articles = (boot?.rss?.articles || []).slice(0, 5)
+  const articles = (boot?.rss?.articles || []).slice(0, 12)
   const feeds = boot?.rss?.feeds || []
   if (!feeds.length) {
     return h(Empty, { icon: 'rss', title: '还没有订阅', hint: '添加你喜欢的博客或资讯 RSS 源' })
@@ -276,7 +277,7 @@ function RssCardBody({ boot }) {
     return h(Empty, { icon: 'rss', title: '订阅还未刷新', hint: '到 RSS 频道点击刷新拉取最新文章' })
   }
   const feedName = (id) => feeds.find((f) => f.id === id)?.title || ''
-  return h('div', { className: 'fh-card-row', style: { width: '100%' } },
+  return h('div', { className: 'fh-card-row is-scroll', style: { width: '100%' } },
     articles.map((a) => h('button', { key: a.id, className: 'fh-mini-item', onClick: () => queueRssArticle(a) },
       h('span', { className: `fh-feed-dot${a.read ? ' is-read' : ''}` }),
       h('span', { className: 't' }, a.title),

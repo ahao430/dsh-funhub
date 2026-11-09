@@ -176,7 +176,7 @@ html.fh-light .fh-toast { box-shadow: 0 8px 30px rgba(20, 26, 40, .18); }
 @media (max-width: 1480px) { .fh-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 1080px) { .fh-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .fh-grid { grid-template-columns: 1fr; } .fh-side { width: 56px; } .fh-side-item span.fh-side-label { display: none; } }
-.fh-card { grid-column: span 1; position: relative; border: 1px solid var(--fh-line); border-radius: var(--fh-r-lg); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-height: 180px; overflow: hidden; background: var(--fh-panel); }
+.fh-card { grid-column: span 1; position: relative; border: 1px solid var(--fh-line); border-radius: var(--fh-r-lg); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-height: 180px; max-height: min(460px, 62vh); overflow: hidden; background: var(--fh-panel); }
 .fh-card::before { content: ''; position: absolute; inset: 0; background: linear-gradient(115deg, color-mix(in srgb, var(--fh-panel) 30%, transparent), color-mix(in srgb, var(--fh-panel) 76%, transparent) 62%); pointer-events: none; }
 .fh-card > * { position: relative; }
 /* 氛围图层：小说/音乐/RSS 卡片叠素材图 + 深色渐变遮罩（文字可读），关闭氛围背景时不渲染。
@@ -217,7 +217,10 @@ html.fh-light .fh-toast { box-shadow: 0 8px 30px rgba(20, 26, 40, .18); }
 .fh-card-title { font-weight: 600; font-size: 13.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; color: var(--fh-ink); background: none; border: none; padding: 0; }
 .fh-card-title:hover { color: var(--fh-accent); }
 .fh-card-body { flex: 1; display: flex; gap: 10px; overflow: hidden; min-height: 0; }
+/* 卡片内滚动列表：超出滚动，标题/分类 chips 在滚动区外保持固定 */
+.fh-card-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; overscroll-behavior: contain; }
 .fh-card-row { display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+.fh-card-row.is-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; overscroll-behavior: contain; }
 .fh-mini-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--fh-r-md); cursor: pointer; border: none; background: none; color: var(--fh-ink); text-align: left; font-size: 12.5px; min-width: 0; }
 .fh-mini-item:hover { background: var(--fh-panel-2); }
 .fh-mini-item .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
