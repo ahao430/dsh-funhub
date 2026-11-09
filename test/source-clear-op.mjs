@@ -69,4 +69,36 @@ const base = () => ({
   assert.equal(OPS.video_emby_clear(s).removed, 0, '幂等')
 }
 
+/* 阅读历史单删 + 书架清空 scope（novelShelf/comicShelf）语义 */
+{
+  const s = base()
+  s.novelHistory = [
+    { bookId: 'a', sourceId: 'x', title: 'A' },
+    { bookId: 'b', sourceId: 'x', title: 'B' },
+  ]
+  s.shelf = [{ bookId: 'a', sourceId: 'x', title: 'A' }]
+  s.readingProgress = { a: { chapterIndex: 3 } }
+  const r = OPS.novel_history_remove(s, { bookId: 'a' })
+  assert.equal(r.removed, 1, '历史单删计数')
+  assert.equal(s.novelHistory.length, 1)
+  assert.equal(s.novelHistory[0].bookId, 'b')
+  assert.equal(s.shelf.length, 1, '单删历史不动书架')
+  OPS.data_clear(s, { scope: 'novelShelf' })
+  assert.equal(s.shelf.length, 0, '书架已清空')
+  assert.deepEqual(s.readingProgress, {}, '书架清空连进度一起清')
+  assert.equal(s.novelHistory.length, 1, '清书架不动历史')
+
+  const c = base()
+  c.comicHistory = [{ sourceKey: 'k', comicId: 'c1', title: 'C1' }, { sourceKey: 'k', comicId: 'c2', title: 'C2' }]
+  c.comics = [{ sourceKey: 'k', comicId: 'c1', title: 'C1' }]
+  c.comicProgress = { 'c1@k': { chapterIndex: 1 } }
+  const rc = OPS.comic_history_remove(c, { sourceKey: 'k', comicId: 'c1' })
+  assert.equal(rc.removed, 1)
+  assert.equal(c.comics.length, 1, '单删历史不动漫画书架')
+  OPS.data_clear(c, { scope: 'comicShelf' })
+  assert.equal(c.comics.length, 0)
+  assert.deepEqual(c.comicProgress, {})
+  assert.equal(c.comicHistory.length, 1, '清漫画书架不动历史')
+}
+
 console.log('源清空 op 语义验证全部通过')

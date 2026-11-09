@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState, createElement as h } from 'react'
 import { api } from './api.js'
 import { actions, getState } from './store.js'
-import { Icon, Btn, Input, Select, Empty, Loading, ErrorBox, Modal, coverSrc, fmtAgo } from './ui.jsx'
+import {Icon, Btn, Input, Select, Empty, Loading, ErrorBox, Modal, coverSrc, fmtAgo, ConfirmModal} from './ui.jsx'
 
 export function BookTile({ book, onClick }) {
   // 兼容两种形状：公版书 {title, cover} 与书源结果 {name, coverUrl}
@@ -123,9 +123,11 @@ export function NovelPage() {
   )
 }
 
-/* ---------- 阅读历史（完整列表） ---------- */
+/* ---------- 阅读历史（完整列表）：行内删除 + 清空（二次确认） ---------- */
 function NovelHistoryTab({ boot }) {
   const history = boot?.novelHistory || []
+  const [confirmClear, setConfirmClear] = useState(false)
+  const [confirmDel, setConfirmDel] = useState(null) // 待删除的历史条目
   if (!history.length) {
     return h(Empty, { icon: 'book', title: '还没有阅读记录', hint: '打开任意一本书后会自动记录在这里（无需加入书架）' })
   }
@@ -133,13 +135,9 @@ function NovelHistoryTab({ boot }) {
     h('div', { style: { display: 'flex', alignItems: 'center' } },
       h('div', { style: { fontWeight: 600, fontSize: 14 } }, `阅读历史 ${history.length} 本`),
       h('div', { className: 'fh-spacer' }),
-      h('button', { className: 'fh-chip-btn', onClick: async () => {
-        await api.op('data_clear', { scope: 'novelHistory' })
-        await actions.reload()
-        actions.toast('已清空阅读历史')
-      } }, '清空')),
+      h('button', { className: 'fh-chip-btn', onClick: () => setConfirmClear(true) }, '清空')),
     h('div', { className: 'fh-rowlist' },
-      history.map((b) => h('button', { key: b.bookId, className: 'fh-row', onClick: () => actions.openNovel({
+      history.map((b) => h('div', { key: b.bookId, className: 'fh-row', style: { cursor: 'pointer' }, onClick: () => actions.openNovel({
         mode: b.sourceId === 'gutenberg' ? 'gutenberg' : 'legado',
         sourceId: b.sourceId, bookId: b.bookId, title: b.title, author: b.author || '', cover: b.cover || '',
         chapterIndex: b.chapterIndex || 0,
@@ -147,13 +145,31 @@ function NovelHistoryTab({ boot }) {
         b.cover ? h('img', { src: b.cover, alt: '', style: { width: 26, height: 36, borderRadius: 4, objectFit: 'cover', flex: 'none', background: 'var(--fh-panel-2)' }, onError: (e) => { e.currentTarget.style.visibility = 'hidden' } }) : h('span', { className: 'fh-mini-art', style: { width: 26, height: 26 } }, '📖'),
         h('span', { className: 't' }, b.title),
         h('span', { className: 's' }, b.chapterTitle || `第 ${(b.chapterIndex || 0) + 1} 章`),
-        h('span', { className: 's' }, fmtAgo(b.updatedAt))))))
+        h('span', { className: 's' }, fmtAgo(b.updatedAt)),
+        h('button', { className: 'fh-icon-btn', style: { flex: 'none' }, title: '删除此记录', onClick: (e) => { e.stopPropagation(); setConfirmDel(b) } }, h(Icon, { name: 'trash', size: 13 }))))),
+    confirmClear ? h(ConfirmModal, {
+      title: '清空阅读历史', message: `确定删除全部 ${history.length} 条阅读记录吗？该操作不可恢复。`,
+      hint: '书架与阅读进度不受影响。', label: '清空',
+      onClose: () => setConfirmClear(false),
+      onConfirm: async () => { await api.op('data_clear', { scope: 'novelHistory' }); await actions.reload(); actions.toast('已清空阅读历史') },
+    }) : null,
+    confirmDel ? h(ConfirmModal, {
+      title: '删除阅读记录', message: `确定删除《${confirmDel.title}》的阅读记录吗？`,
+      hint: '书架不受影响；重新打开该书会再次记录。', label: '删除',
+      onClose: () => setConfirmDel(null),
+      onConfirm: async () => {
+        await api.op('novel_history_remove', { bookId: confirmDel.bookId })
+        await actions.reload(); actions.toast(`已删除《${confirmDel.title}》的记录`)
+      },
+    }) : null,
+  )
 }
 
 /* ---------- 发现（默认） ---------- */
 function DiscoverTab({ boot, onOpenDetail, onGotoTab }) {
   const history = boot?.novelHistory || []
   const shelf = boot?.shelf || []
+  const [confirmDelSource, setConfirmDelSource] = useState(null) // 待删除的书源
 
   /* 书源发现（主内容）：有可声明发现配置的书源才参与 */
   const bookSources = boot?.bookSources || []
@@ -248,11 +264,7 @@ function DiscoverTab({ boot, onOpenDetail, onGotoTab }) {
             h('button', { className: `fh-side-item${exploreSourceId === s.url ? ' is-on' : ''}`, style: { flex: 1, minWidth: 0 }, onClick: () => setExploreSourceId(s.url), title: s.name },
               h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, s.name),
               h('span', { className: 'fh-muted', style: { fontSize: 10.5, flex: 'none', marginLeft: 4 } }, s.exploreCount)),
-            h('button', { className: 'fh-icon-btn', style: { width: 24, height: 24, flex: 'none' }, title: '删除此书源', onClick: async () => {
-              await api.op('booksource_remove', { id: s.id })
-              await actions.reload()
-              actions.toast(`已删除书源「${s.name}」`)
-            } }, h(Icon, { name: 'trash', size: 12 })))),
+            h('button', { className: 'fh-icon-btn', style: { width: 24, height: 24, flex: 'none' }, title: '删除此书源', onClick: () => setConfirmDelSource(s) }, h(Icon, { name: 'trash', size: 12 })))),
           h('div', { className: 'fh-muted', style: { fontSize: 11, marginTop: 6, paddingLeft: 10 } }, `${exploreSources.length} 个源可发现 · 删除去设置`)),
         h('div', { className: 'fh-rss-list' },
           categories.length > 1 ? h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 } },
@@ -299,6 +311,17 @@ function DiscoverTab({ boot, onOpenDetail, onGotoTab }) {
         popularMore ? h('div', { style: { display: 'flex', justifyContent: 'center', gridColumn: '1/-1' } },
           h(Btn, { onClick: () => loadPopular(popularPage + 1), disabled: popularLoading }, popularLoading ? '加载中…' : '加载更多')) : null,
       ) : null) : null,
+
+    confirmDelSource ? h(ConfirmModal, {
+      title: '删除书源', message: `确定删除书源「${confirmDelSource.name}」吗？`,
+      hint: '该源将从设置的书源列表中一并移除，不可恢复（可重新导入）。', label: '删除',
+      onClose: () => setConfirmDelSource(null),
+      onConfirm: async () => {
+        await api.op('booksource_remove', { id: confirmDelSource.id })
+        await actions.reload()
+        actions.toast(`已删除书源「${confirmDelSource.name}」`)
+      },
+    }) : null,
 
     !shelf.length && !history.length && !exploreSources.length ? h(Empty, {
       icon: 'book', title: '从下面的热门公版书开始，或去搜索',
@@ -377,23 +400,41 @@ function BookDetail({ book, onClose }) {
 function ShelfTab({ boot }) {
   const shelf = boot?.shelf || []
   const progress = boot?.readingProgress || {}
+  const [confirmClear, setConfirmClear] = useState(false)
+  const [confirmDel, setConfirmDel] = useState(null) // 待移除的书
   if (!shelf.length) {
     return h(Empty, { icon: 'book', title: '书架是空的', hint: '在「发现」或「搜索」里找书后点击「加入书架」' })
   }
-  return h('div', { className: 'fh-tiles' },
-    shelf.map((b) => h('div', { key: b.bookId, className: 'fh-tile', onClick: () => actions.openNovel({
-      mode: b.sourceId === 'gutenberg' ? 'gutenberg' : 'legado',
-      sourceId: b.sourceId, bookId: b.bookId, title: b.title, author: b.author || '', cover: b.cover || '', chapterIndex: null,
-    }) },
-      b.cover ? h('img', { className: 'fh-tile-cover', src: coverSrc(b.cover), loading: 'lazy', alt: '' })
-        : h('div', { className: 'fh-tile-cover', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 } }, '📖'),
-      h('div', { className: 'fh-tile-title' }, b.title),
-      h('div', { className: 'fh-tile-sub' }, progress[b.bookId] ? `已读 ${progress[b.bookId].chapterIndex + 1} 章` : '未开始'),
-      h('button', { className: 'fh-btn fh-btn-sm fh-btn-ghost', style: { alignSelf: 'flex-start' }, onClick: async (e) => {
-        e.stopPropagation()
-        await api.op('shelf_remove', { bookId: b.bookId })
-        await actions.reload()
-      } }, '移除'))),
+  return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+    h('div', { style: { display: 'flex', alignItems: 'center' } },
+      h('div', { style: { fontWeight: 600, fontSize: 14 } }, `书架 ${shelf.length} 本`),
+      h('div', { className: 'fh-spacer' }),
+      h('button', { className: 'fh-chip-btn', onClick: () => setConfirmClear(true) }, '清空')),
+    h('div', { className: 'fh-tiles' },
+      shelf.map((b) => h('div', { key: b.bookId, className: 'fh-tile', onClick: () => actions.openNovel({
+        mode: b.sourceId === 'gutenberg' ? 'gutenberg' : 'legado',
+        sourceId: b.sourceId, bookId: b.bookId, title: b.title, author: b.author || '', cover: b.cover || '', chapterIndex: null,
+      }) },
+        b.cover ? h('img', { className: 'fh-tile-cover', src: coverSrc(b.cover), loading: 'lazy', alt: '' })
+          : h('div', { className: 'fh-tile-cover', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 } }, '📖'),
+        h('div', { className: 'fh-tile-title' }, b.title),
+        h('div', { className: 'fh-tile-sub' }, progress[b.bookId] ? `已读 ${progress[b.bookId].chapterIndex + 1} 章` : '未开始'),
+        h('button', { className: 'fh-btn fh-btn-sm fh-btn-ghost', style: { alignSelf: 'flex-start' }, onClick: (e) => {
+          e.stopPropagation()
+          setConfirmDel(b)
+        } }, '移除')))),
+    confirmClear ? h(ConfirmModal, {
+      title: '清空书架', message: `确定移除书架上的全部 ${shelf.length} 本书吗？该操作不可恢复。`,
+      hint: '将同时清空这些书的阅读进度；阅读历史不受影响。', label: '清空书架',
+      onClose: () => setConfirmClear(false),
+      onConfirm: async () => { await api.op('data_clear', { scope: 'novelShelf' }); await actions.reload(); actions.toast('已清空书架') },
+    }) : null,
+    confirmDel ? h(ConfirmModal, {
+      title: '移出书架', message: `确定把《${confirmDel.title}》移出书架吗？`,
+      hint: '阅读进度会一并清除；阅读历史保留。', label: '移除',
+      onClose: () => setConfirmDel(null),
+      onConfirm: async () => { await api.op('shelf_remove', { bookId: confirmDel.bookId }); await actions.reload(); actions.toast(`已移除《${confirmDel.title}》`) },
+    }) : null,
   )
 }
 

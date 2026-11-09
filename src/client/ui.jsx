@@ -212,3 +212,18 @@ export function fmtAgo(ts) {
   if (diff < 30 * 86400_000) return `${Math.floor(diff / 86400_000)} 天前`
   return new Date(ts).toLocaleDateString('zh-CN')
 }
+
+/** 危险操作二次确认弹窗（清空书架/历史、删除源等共用）：确认后执行 onConfirm，完成自动关闭。 */
+export function ConfirmModal({ title, message, hint, label = '确认执行', busyLabel = '执行中…', onClose, onConfirm }) {
+  const [busy, setBusy] = useState(false)
+  return h(Modal, { title, onClose, width: 400 },
+    h('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } },
+      h('div', { style: { fontSize: 13, lineHeight: 1.7 } }, message),
+      hint ? h('div', { className: 'fh-muted', style: { fontSize: 12 } }, hint) : null,
+      h('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end' } },
+        h(Btn, { onClick: onClose, disabled: busy }, '取消'),
+        h(Btn, { kind: 'danger', disabled: busy, onClick: async () => {
+          setBusy(true)
+          try { await onConfirm(); onClose() } finally { setBusy(false) }
+        } }, busy ? busyLabel : label))))
+}

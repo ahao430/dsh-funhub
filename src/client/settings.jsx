@@ -5,7 +5,7 @@ import { useCallback, useRef, useState, createElement as h } from 'react'
 import { api } from './api.js'
 import { actions, getState, subscribe } from './store.js'
 import { applyAccent } from './app.jsx'
-import { Icon, Btn, Input, Toggle, Modal, useStore, fmtAgo } from './ui.jsx'
+import { Icon, Btn, Input, Toggle, Modal, useStore, fmtAgo, ConfirmModal } from './ui.jsx'
 
 const CARD_LABELS = { novel: '小说阅读', comic: '漫画', gallery: '图片广场', music: '音乐', games: '小游戏', rss: 'RSS 订阅' }
 const SIZE_LABELS = { '1x1': '小 1×1', '2x1': '宽 2×1', '1x2': '高 1×2', '2x2': '大 2×2' }
@@ -186,22 +186,6 @@ function BackgroundRow({ slot }) {
     } }))
 }
 
-
-/* ================= 阅读书源 ================= */
-/** 危险操作二次确认弹窗（检测清理等共用）：确认后执行 onConfirm，完成自动关闭。 */
-function ConfirmModal({ title, message, hint, label = '确认执行', busyLabel = '执行中…', onClose, onConfirm }) {
-  const [busy, setBusy] = useState(false)
-  return h(Modal, { title, onClose, width: 400 },
-    h('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } },
-      h('div', { style: { fontSize: 13, lineHeight: 1.7 } }, message),
-      hint ? h('div', { className: 'fh-muted', style: { fontSize: 12 } }, hint) : null,
-      h('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end' } },
-        h(Btn, { onClick: onClose, disabled: busy }, '取消'),
-        h(Btn, { kind: 'danger', disabled: busy, onClick: async () => {
-          setBusy(true)
-          try { await onConfirm(); onClose() } finally { setBusy(false) }
-        } }, busy ? busyLabel : label))))
-}
 
 /** 清空源确认弹窗：书源 / 漫画源 / 影视源共用。历史与收藏独立存储，不受影响。 */
 export function ClearSourcesModal({ what, count, op, fmt, onClose }) {

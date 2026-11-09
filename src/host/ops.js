@@ -78,6 +78,12 @@ export const OPS = {
     return { ok: true }
   },
   /** 小说自动阅读历史：打开章节即记（无论是否在书架），同书去重置顶。 */
+  /** 删除单条阅读历史（不动书架）。 */
+  novel_history_remove(state, { bookId }) {
+    const before = state.novelHistory.length
+    state.novelHistory = state.novelHistory.filter((b) => b.bookId !== String(bookId))
+    return { removed: before - state.novelHistory.length }
+  },
   novel_history(state, { bookId, sourceId, title, author, cover, chapterIndex, chapterTitle }) {
     const id = String(bookId)
     const at = state.novelHistory.findIndex((b) => b.bookId === id)
@@ -178,6 +184,13 @@ export const OPS = {
     return { ok: true }
   },
   /** 漫画自动阅读历史：打开章节即记（无论是否在书架/收藏），同漫画去重置顶。 */
+  /** 删除单条漫画阅读历史（不动书架/收藏）。 */
+  comic_history_remove(state, { sourceKey, comicId }) {
+    const key = `${comicId}@${sourceKey}`
+    const before = state.comicHistory.length
+    state.comicHistory = state.comicHistory.filter((c) => `${c.comicId}@${c.sourceKey}` !== key)
+    return { removed: before - state.comicHistory.length }
+  },
   comic_history(state, { sourceKey, comicId, title, cover, chapterId, chapterTitle }) {
     const key = `${comicId}@${sourceKey}`
     const at = state.comicHistory.findIndex((c) => `${c.comicId}@${c.sourceKey}` === key)
@@ -572,6 +585,8 @@ export const OPS = {
       case 'favorites': state.favorites = []; break
       case 'novelHistory': state.novelHistory = []; break
       case 'comicHistory': state.comicHistory = []; break
+      case 'novelShelf': state.shelf = []; state.readingProgress = {}; break
+      case 'comicShelf': state.comics = []; state.comicProgress = {}; break
       case 'all': Object.assign(state, {
         favorites: [], shelf: [], readingProgress: {}, comicFavs: [], comicProgress: {},
         imageHistory: [], tracks: [], playlists: [], playbackHistory: [],
