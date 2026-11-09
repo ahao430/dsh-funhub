@@ -127,3 +127,9 @@ npm test          # 或逐个 node test/*.mjs
 ## License
 
 MIT
+
+## 🙏 致谢
+
+感谢真诚、友善、团结、专业的 [LinuxDo 社区](https://linux.do/)，让我学到那么多有关 AI 相关知识。
+
+LinuxDo — 学 AI, 上 L 站!
